@@ -24,10 +24,14 @@ In this tutorial, we will show how to use the torchtext library to build the dat
 #
 # To access torchtext datasets, please install torchdata following instructions at https://github.com/pytorch/data.
 #
+
 # COMMAND ----------
+
 spark_write_path = "/tmp/msh/datasets/ag_news"
 train_read_path = "/tmp/msh/datasets/ag_news"
+
 # COMMAND ----------
+
 from pyspark.sql import SparkSession
 
 if locals().get("spark") is None:
@@ -42,9 +46,10 @@ if locals().get("spark") is None:
         .getOrCreate()
     )
 else:
-    train_read_path = f"dbfs/{train_read_path}"
+    train_read_path = f"/dbfs{train_read_path}"
 
 # COMMAND ----------
+
 import torch
 from torchtext.datasets import AG_NEWS
 

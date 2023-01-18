@@ -2,5 +2,7 @@ torch
 torchtext
 torchvision
 torchdata
+pytorch-lightning
 iopath
 deltalake
+  

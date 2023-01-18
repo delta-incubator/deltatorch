@@ -1,5 +1,6 @@
 # Databricks notebook source
 # MAGIC %pip install -r ../requirements.txt
+
 # COMMAND ----------
 
 from functools import partial
@@ -28,7 +29,9 @@ from torchdelta import DeltaDataPipe
 
 spark_write_path = "/tmp/msh/datasets/cifar"
 train_read_path = "/tmp/msh/datasets/cifar"
+
 # COMMAND ----------
+
 if locals().get("spark") is None:
     spark = (
         SparkSession.builder.master("local[*]")
@@ -41,7 +44,8 @@ if locals().get("spark") is None:
         .getOrCreate()
     )
 else:
-    train_read_path = f"dbfs/{train_read_path}"
+    train_read_path = f"/dbfs{train_read_path}"
+
 # COMMAND ----------
 
 
@@ -61,6 +65,7 @@ def prepare_cifar_data(is_train: bool = True):
 
 prepare_cifar_data(True)
 prepare_cifar_data(False)
+
 # COMMAND ----------
 
 
@@ -94,9 +99,9 @@ class CIFAR10DataModule(pl.LightningDataModule):
             path,
             fields=["image", "label"],
             id_field="id",
-            use_fixed_rank=True,
-            fixed_rank=3,
-            num_ranks=4,
+            use_fixed_rank=False,
+            #fixed_rank=3,
+            #num_ranks=4,
         )
         pipe = pipe.map(self.transform_fn, input_col="image", output_col="image").map(
             lambda x: (x["image"], x["label"])
