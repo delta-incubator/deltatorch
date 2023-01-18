@@ -81,18 +81,19 @@ class CIFAR10DataModule(pl.LightningDataModule):
             ]
         )
 
-        def transform_fn(bytes, transform):
-            img = Image.fromarray(
-                np.frombuffer(bytes, dtype=np.uint8).reshape((32, 32, 3))
-            )
-
-            if transform is not None:
-                img = transform(img)
-            return img
-
-        self.transform_fn = partial(transform_fn, transform=self.transform)
-
         self.num_classes = 10
+
+    @staticmethod
+    def transform_fn(bytes, transform):
+        img = Image.fromarray(np.frombuffer(bytes, dtype=np.uint8).reshape((32, 32, 3)))
+
+        if transform is not None:
+            img = transform(img)
+        return img
+
+    @staticmethod
+    def to_tuple(x):
+        return (x["image"], x["label"])
 
     def dataloader(self, path: str, shuffle=False):
         pipe = DeltaDataPipe(
@@ -103,10 +104,13 @@ class CIFAR10DataModule(pl.LightningDataModule):
             #fixed_rank=3,
             #num_ranks=4,
         )
-        pipe = pipe.map(self.transform_fn, input_col="image", output_col="image").map(
-            lambda x: (x["image"], x["label"])
+        _transform_fn = partial(self.transform_fn, transform=self.transform)
+        pipe = pipe.map(_transform_fn, input_col="image", output_col="image").map(
+            self.to_tuple
         )
-        return DataLoader(pipe, batch_size=self.batch_size, shuffle=shuffle)
+        return DataLoader(
+            pipe, batch_size=self.batch_size, shuffle=shuffle, num_workers=8
+        )
 
     def train_dataloader(self):
         return self.dataloader(f"{train_read_path}_train.delta", shuffle=True)
