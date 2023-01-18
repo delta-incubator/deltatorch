@@ -1,4 +1,7 @@
 # Databricks notebook source
+# MAGIC %pip install -r ../requirements.txt
+
+# COMMAND ----------
 
 
 """
@@ -25,6 +28,7 @@ In this tutorial, we will show how to use the torchtext library to build the dat
 import torch
 from deltalake import write_deltalake
 from torchtext.datasets import AG_NEWS
+
 # COMMAND ----------
 
 from torchdelta import DeltaDataPipe
@@ -39,7 +43,8 @@ classes, texts = list(zip(*train_list))
 df = pd.DataFrame(columns=["class", "text"], data={"class": list(classes), "text": texts})
 df["id"] = range(len(df))
 _delta_path = str("./ag_news.delta")
-write_deltalake(_delta_path, df)
+spark.createDataFrame(df).write.format("delta").mode("overwrite").save("/tmp/msh/datasets/ag_news/ag_news.delta")
+
 # COMMAND ----------
 
 ######################################################################
@@ -80,8 +85,10 @@ from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
 
 tokenizer = get_tokenizer('basic_english')
-train_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
-test_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
+
+delta_path = "/dbfs/tmp/msh/datasets/ag_news/ag_news.delta"
+train_iter = DeltaDataPipe(delta_path, fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
+test_iter = DeltaDataPipe(delta_path, fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
 
 def yield_tokens(data_iter):
     for _, text in data_iter:
@@ -282,8 +289,8 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.1)
 total_accu = None
 
 
-train_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
-test_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
+#train_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
+#test_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
 
 train_dataset = to_map_style_dataset(train_iter)
 test_dataset = to_map_style_dataset(test_iter)
