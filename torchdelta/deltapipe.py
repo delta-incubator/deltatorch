@@ -9,14 +9,16 @@ from typing import List
 
 @functional_datapipe("delta")
 class DeltaDataPipe(IterDataPipe):
-    def __init__(self,
-                 path: str,
-                 fields: List[str],
-                 id_field: str,
-                 batch_size:int=None,
-                 use_fixed_rank: bool = False,
-                 fixed_rank: int = None,
-                 num_ranks: int = None) -> None:
+    def __init__(
+        self,
+        path: str,
+        fields: List[str],
+        id_field: str,
+        batch_size: int = None,
+        use_fixed_rank: bool = False,
+        fixed_rank: int = None,
+        num_ranks: int = None,
+    ) -> None:
         """
 
         :param path:
@@ -41,9 +43,13 @@ class DeltaDataPipe(IterDataPipe):
     def init_scanner_and_apply_rank(self):
         _info = get_worker_info()
         if self.use_fixed_rank:
-            return self.init_scanner(use_rank=True, rank=self.fixed_rank, num_ranks=self.num_ranks)
+            return self.init_scanner(
+                use_rank=True, rank=self.fixed_rank, num_ranks=self.num_ranks
+            )
         elif _info is not None:
-            return self.init_scanner(use_rank=True, rank=_info.id, num_ranks=_info.num_workers)
+            return self.init_scanner(
+                use_rank=True, rank=_info.id, num_ranks=_info.num_workers
+            )
         else:
             return self.init_scanner(use_rank=False)
 
@@ -52,11 +58,12 @@ class DeltaDataPipe(IterDataPipe):
             self.delta_table = DeltaTable(self.path)
             _filter = None
             if use_rank:
-                _filter = pc.bit_wise_and(pc.field(self.id_field), pc.scalar(num_ranks-1)) == pc.scalar(rank)
+                _filter = pc.bit_wise_and(
+                    pc.field(self.id_field), pc.scalar(num_ranks - 1)
+                ) == pc.scalar(rank)
 
             self.scanner = self.delta_table.to_pyarrow_dataset().scanner(
-                columns=self.fields,
-                filter=_filter
+                columns=self.fields, filter=_filter
             )
         return self.scanner
 
@@ -65,7 +72,7 @@ class DeltaDataPipe(IterDataPipe):
             pylist = rb.to_pylist()
             if self.batch_size:
                 for i in range(0, len(pylist), self.batch_size):
-                    yield pylist[i:i+self.batch_size]
+                    yield pylist[i : i + self.batch_size]
             else:
                 for item in pylist:
                     yield item

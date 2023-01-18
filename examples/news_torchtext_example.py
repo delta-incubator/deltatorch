@@ -24,9 +24,28 @@ In this tutorial, we will show how to use the torchtext library to build the dat
 #
 # To access torchtext datasets, please install torchdata following instructions at https://github.com/pytorch/data.
 #
+# COMMAND ----------
+spark_write_path = "/tmp/msh/datasets/ag_news"
+train_read_path = "/tmp/msh/datasets/ag_news"
+# COMMAND ----------
+from pyspark.sql import SparkSession
 
+if locals().get("spark") is None:
+    spark = (
+        SparkSession.builder.master("local[*]")
+        .config("spark.jars.packages", "io.delta:delta-core_2.12:1.2.1")
+        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+        .config(
+            "spark.sql.catalog.spark_catalog",
+            "org.apache.spark.sql.delta.catalog.DeltaCatalog",
+        )
+        .getOrCreate()
+    )
+else:
+    train_read_path = f"dbfs/{train_read_path}"
+
+# COMMAND ----------
 import torch
-from deltalake import write_deltalake
 from torchtext.datasets import AG_NEWS
 
 # COMMAND ----------
@@ -37,13 +56,18 @@ from torchdelta import DeltaDataPipe
 # Let's prepare data
 ######################################################################
 import pandas as pd
-train_iter = AG_NEWS(split='train')
+
+train_iter = AG_NEWS(split="train")
 train_list = list(train_iter)
 classes, texts = list(zip(*train_list))
-df = pd.DataFrame(columns=["class", "text"], data={"class": list(classes), "text": texts})
+df = pd.DataFrame(
+    columns=["class", "text"], data={"class": list(classes), "text": texts}
+)
 df["id"] = range(len(df))
 _delta_path = str("./ag_news.delta")
-spark.createDataFrame(df).write.format("delta").mode("overwrite").save("/tmp/msh/datasets/ag_news/ag_news.delta")
+spark.createDataFrame(df).write.format("delta").mode("overwrite").save(
+    f"{spark_write_path}/ag_news.delta"
+)
 
 # COMMAND ----------
 
@@ -84,15 +108,21 @@ spark.createDataFrame(df).write.format("delta").mode("overwrite").save("/tmp/msh
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
 
-tokenizer = get_tokenizer('basic_english')
+tokenizer = get_tokenizer("basic_english")
 
-delta_path = "/dbfs/tmp/msh/datasets/ag_news/ag_news.delta"
-train_iter = DeltaDataPipe(delta_path, fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
-test_iter = DeltaDataPipe(delta_path, fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
+delta_path = f"{train_read_path}/ag_news.delta"
+train_iter = DeltaDataPipe(delta_path, fields=["class", "text"], id_field="id").map(
+    lambda x: (x["class"], x["text"])
+)
+test_iter = DeltaDataPipe(delta_path, fields=["class", "text"], id_field="id").map(
+    lambda x: (x["class"], x["text"])
+)
+
 
 def yield_tokens(data_iter):
     for _, text in data_iter:
         yield tokenizer(text)
+
 
 vocab = build_vocab_from_iterator(yield_tokens(train_iter), specials=["<unk>"])
 vocab.set_default_index(vocab["<unk>"])
@@ -123,7 +153,6 @@ label_pipeline = lambda x: int(x) - 1
 #
 
 
-
 ######################################################################
 # Generate data batch and iterator
 # --------------------------------
@@ -138,7 +167,9 @@ label_pipeline = lambda x: int(x) - 1
 
 
 from torch.utils.data import DataLoader
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def collate_batch(batch):
     label_list, text_list, offsets = [], [], [0]
@@ -152,7 +183,10 @@ def collate_batch(batch):
     text_list = torch.cat(text_list)
     return label_list.to(device), text_list.to(device), offsets.to(device)
 
-dataloader = DataLoader(train_iter, batch_size=8, shuffle=False, collate_fn=collate_batch)
+
+dataloader = DataLoader(
+    train_iter, batch_size=8, shuffle=False, collate_fn=collate_batch
+)
 
 
 ######################################################################
@@ -170,8 +204,8 @@ dataloader = DataLoader(train_iter, batch_size=8, shuffle=False, collate_fn=coll
 
 from torch import nn
 
-class TextClassificationModel(nn.Module):
 
+class TextClassificationModel(nn.Module):
     def __init__(self, vocab_size, embed_dim, num_class):
         super(TextClassificationModel, self).__init__()
         self.embedding = nn.EmbeddingBag(vocab_size, embed_dim, sparse=True)
@@ -219,6 +253,7 @@ model = TextClassificationModel(vocab_size, emsize, num_class).to(device)
 
 import time
 
+
 def train(dataloader):
     model.train()
     total_acc, total_count = 0, 0
@@ -236,11 +271,15 @@ def train(dataloader):
         total_count += label.size(0)
         if idx % log_interval == 0 and idx > 0:
             elapsed = time.time() - start_time
-            print('| epoch {:3d} | {:5d}/{:5d} batches '
-                  '| accuracy {:8.3f}'.format(epoch, idx, len(dataloader),
-                                              total_acc/total_count))
+            print(
+                "| epoch {:3d} | {:5d}/{:5d} batches "
+                "| accuracy {:8.3f}".format(
+                    epoch, idx, len(dataloader), total_acc / total_count
+                )
+            )
             total_acc, total_count = 0, 0
             start_time = time.time()
+
 
 def evaluate(dataloader):
     model.eval()
@@ -252,7 +291,7 @@ def evaluate(dataloader):
             loss = criterion(predicted_label, label)
             total_acc += (predicted_label.argmax(1) == label).sum().item()
             total_count += label.size(0)
-    return total_acc/total_count
+    return total_acc / total_count
 
 
 ######################################################################
@@ -278,10 +317,11 @@ def evaluate(dataloader):
 
 from torch.utils.data.dataset import random_split
 from torchtext.data.functional import to_map_style_dataset
+
 # Hyperparameters
-EPOCHS = 10 # epoch
+EPOCHS = 10  # epoch
 LR = 5  # learning rate
-BATCH_SIZE = 64 # batch size for training
+BATCH_SIZE = 64  # batch size for training
 
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=LR)
@@ -289,22 +329,26 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.1)
 total_accu = None
 
 
-#train_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
-#test_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
+# train_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
+# test_iter = DeltaDataPipe("./ag_news.delta", fields=["class", "text"], id_field="id").map(lambda x: (x["class"],x["text"]))
 
 train_dataset = to_map_style_dataset(train_iter)
 test_dataset = to_map_style_dataset(test_iter)
 num_train = int(len(train_dataset) * 0.95)
-split_train_, split_valid_ = \
-    random_split(train_dataset, [num_train, len(train_dataset) - num_train])
+split_train_, split_valid_ = random_split(
+    train_dataset, [num_train, len(train_dataset) - num_train]
+)
 
 
-train_dataloader = DataLoader(split_train_, batch_size=BATCH_SIZE,
-                              shuffle=True, collate_fn=collate_batch)
-valid_dataloader = DataLoader(split_valid_, batch_size=BATCH_SIZE,
-                              shuffle=True, collate_fn=collate_batch)
-test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,
-                             shuffle=True, collate_fn=collate_batch)
+train_dataloader = DataLoader(
+    split_train_, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_batch
+)
+valid_dataloader = DataLoader(
+    split_valid_, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_batch
+)
+test_dataloader = DataLoader(
+    test_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_batch
+)
 
 for epoch in range(1, EPOCHS + 1):
     epoch_start_time = time.time()
@@ -314,13 +358,14 @@ for epoch in range(1, EPOCHS + 1):
         scheduler.step()
     else:
         total_accu = accu_val
-    print('-' * 59)
-    print('| end of epoch {:3d} | time: {:5.2f}s | '
-          'valid accuracy {:8.3f} '.format(epoch,
-                                           time.time() - epoch_start_time,
-                                           accu_val))
-    print('-' * 59)
-
+    print("-" * 59)
+    print(
+        "| end of epoch {:3d} | time: {:5.2f}s | "
+        "valid accuracy {:8.3f} ".format(
+            epoch, time.time() - epoch_start_time, accu_val
+        )
+    )
+    print("-" * 59)
 
 
 ######################################################################
@@ -329,15 +374,12 @@ for epoch in range(1, EPOCHS + 1):
 #
 
 
-
 ######################################################################
 # Checking the results of the test dataset…
 
-print('Checking the results of test dataset.')
+print("Checking the results of test dataset.")
 accu_test = evaluate(test_dataloader)
-print('test accuracy {:8.3f}'.format(accu_test))
-
-
+print("test accuracy {:8.3f}".format(accu_test))
 
 
 ######################################################################
@@ -348,16 +390,15 @@ print('test accuracy {:8.3f}'.format(accu_test))
 #
 
 
-ag_news_label = {1: "World",
-                 2: "Sports",
-                 3: "Business",
-                 4: "Sci/Tec"}
+ag_news_label = {1: "World", 2: "Sports", 3: "Business", 4: "Sci/Tec"}
+
 
 def predict(text, text_pipeline):
     with torch.no_grad():
         text = torch.tensor(text_pipeline(text))
         output = model(text, torch.tensor([0]))
         return output.argmax(1).item() + 1
+
 
 ex_text_str = "MEMPHIS, Tenn. – Four days ago, Jon Rahm was \
     enduring the season’s worst weather conditions on Sunday at The \
@@ -373,4 +414,4 @@ ex_text_str = "MEMPHIS, Tenn. – Four days ago, Jon Rahm was \
 
 model = model.to("cpu")
 
-print("This is a %s news" %ag_news_label[predict(ex_text_str, text_pipeline)])
+print("This is a %s news" % ag_news_label[predict(ex_text_str, text_pipeline)])
