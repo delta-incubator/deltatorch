@@ -5,4 +5,5 @@ torchdata
 pytorch-lightning
 iopath
 deltalake
+pillow
   
