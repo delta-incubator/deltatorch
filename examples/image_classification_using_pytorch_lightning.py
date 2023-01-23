@@ -11,9 +11,6 @@ import pytorch_lightning as pl
 
 import torch
 from PIL import Image
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import monotonically_increasing_id
-from pyspark.sql.types import StructType, StructField, BinaryType, IntegerType, LongType
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import random_split, DataLoader
@@ -30,50 +27,14 @@ from torchdelta.deltadataset import DeltaIterableDataset
 
 spark_write_path = "/tmp/msh/datasets/cifar"
 train_read_path = "/tmp/msh/datasets/cifar"
-
-# COMMAND ----------
-
-# if locals().get("spark") is None:
-#     spark = (
-#         SparkSession.builder.master("local[*]")
-#         .config("spark.jars.packages", "io.delta:delta-core_2.12:1.2.1")
-#         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-#         .config(
-#             "spark.sql.catalog.spark_catalog",
-#             "org.apache.spark.sql.delta.catalog.DeltaCatalog",
-#         )
-#         .getOrCreate()
-#     )
-# else:
-#     train_read_path = f"/dbfs{train_read_path}"
-train_read_path = f"/dbfs{train_read_path}"
-# COMMAND ----------
-
-
-# def prepare_cifar_data(is_train: bool = True):
-#     dataset = CIFAR10(".", train=is_train, download=True)
-#     spark.createDataFrame(
-#         zip(list(map(lambda x: x.tobytes(), dataset.data)), dataset.targets),
-#         StructType(
-#             [StructField("image", BinaryType()), StructField("label", LongType())]
-#         ),
-#     ).withColumn("id", monotonically_increasing_id()).write.format("delta").mode(
-#         "overwrite"
-#     ).save(
-#         f"{spark_write_path}_{'train' if is_train else 'test'}.delta"
-#     )
-
-
-# prepare_cifar_data(True)
-# prepare_cifar_data(False)
-
+if locals().get("spark") is not None:
+    train_read_path = f"/dbfs{train_read_path}"
 # COMMAND ----------
 
 
 class CIFAR10DataModule(pl.LightningDataModule):
-    def __init__(self, batch_size):
+    def __init__(self):
         super().__init__()
-        self.batch_size = batch_size
 
         self.transform = transforms.Compose(
             [
@@ -113,33 +74,34 @@ class CIFAR10DataModule(pl.LightningDataModule):
         dataset = DeltaIterableDataset(
             path,
             src_field="image",
-            target_field= "label",
+            target_field="label",
             id_field="id",
             use_fixed_rank=False,
             transform=self.transform,
-            apply_src_numpy_shape=(32, 32, 3)
+            apply_src_numpy_shape=(32, 32, 3),
+            num_workers=num_workers if num_workers > 0 else 2
             # fixed_rank=3,
             # num_ranks=4,
         )
 
         return DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            num_workers=num_workers
+            dataset, batch_size=batch_size, shuffle=shuffle, num_workers=0
         )
 
     def train_dataloader(self):
-        return self.dataloader(f"{train_read_path}_train.delta",
-                               shuffle=False,
-                               batch_size=64,
-                               num_workers=2)
+        return self.dataloader(
+            f"{train_read_path}_train.delta",
+            shuffle=False,
+            batch_size=128,
+            num_workers=8,
+        )
 
     def val_dataloader(self):
         return self.dataloader(f"{train_read_path}_test.delta")
 
     def test_dataloader(self):
         return self.dataloader(f"{train_read_path}_test.delta")
+
 
 class LitModel(pl.LightningModule):
     def __init__(self, input_shape, num_classes, learning_rate=2e-4):
@@ -233,12 +195,12 @@ class LitModel(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
-if __name__ == '__main__':
 
-    dm = CIFAR10DataModule(batch_size=1)
-    #x = next(iter(dm.train_dataloader()))
-    #print(x)
+if __name__ == "__main__":
 
+    dm = CIFAR10DataModule()
+    # x = next(iter(dm.train_dataloader()))
+    # print(x)
 
     # Samples required by the custom ImagePredictionLogger callback to log image predictions.
     # val_samples = next(iter(dm.val_dataloader()))
@@ -256,9 +218,9 @@ if __name__ == '__main__':
     # Initialize a trainer
     trainer = pl.Trainer(
         accelerator="gpu",
-        max_epochs=2,
-        #gpus=0,
-        #callbacks=[early_stop_callback, checkpoint_callback],
+        max_epochs=1,
+        # gpus=0,
+        # callbacks=[early_stop_callback, checkpoint_callback],
     )
 
     # Train the model ⚡🚅⚡

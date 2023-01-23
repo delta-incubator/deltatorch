@@ -1,4 +1,7 @@
 import math
+import queue
+from multiprocessing import Queue, Process
+from queue import Empty
 
 import numpy as np
 from deltalake import DeltaTable
@@ -14,17 +17,18 @@ class DeltaIterableDataset(IterableDataset):
     def __init__(
         self,
         path: str,
-        #fields: List[str],
+        # fields: List[str],
         id_field: str,
-        src_field:str,
-        target_field:str,
+        src_field: str,
+        target_field: str,
         batch_size: int = None,
         apply_src_numpy_shape=None,
-        transform:Optional[Callable] = None,
-        target_transform:Optional[Callable] = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
         use_fixed_rank: bool = False,
         fixed_rank: int = None,
         num_ranks: int = None,
+        num_workers: int = 2,
     ) -> None:
         """
 
@@ -38,13 +42,17 @@ class DeltaIterableDataset(IterableDataset):
         """
         super().__init__()
         self.path = path
-        self.fields = {src_field:ds.field(src_field), target_field:ds.field(target_field)} #{field_name: ds.field(field_name) for field_name in fields}
+        self.fields = {
+            src_field: ds.field(src_field),
+            target_field: ds.field(target_field),
+        }  # {field_name: ds.field(field_name) for field_name in fields}
         self.id_field = id_field
         self.src_field = src_field
         self.target_field = target_field
         self.use_fixed_rank = use_fixed_rank
         self.fixed_rank = fixed_rank
         self.num_ranks = num_ranks
+        self.num_workers = num_workers
         self.batch_size = batch_size
         self.apply_src_numpy_shape = apply_src_numpy_shape
         self.transform = transform
@@ -54,14 +62,81 @@ class DeltaIterableDataset(IterableDataset):
         self.scanner = None
         self.start = 0
         self.end = self.count()
+        self.queue = Queue()
         self.delta_table = None
         self.scanner = None
+        self.workers = [
+            Process(
+                target=self.worker_fn,
+                args=(
+                    self.path,
+                    i * self.end / self.num_workers,
+                    (i + 1) * self.end / self.num_workers,
+                    self.queue,
+                    self.id_field,
+                    self.fields,
+                    self.apply_src_numpy_shape,
+                    self.src_field,
+                    self.target_field,
+                    self.transform,
+                    self.target_transform,
+                ),
+                daemon=True,
+            )
+            for i in range(self.num_workers + 1)
+        ]
+        for w in self.workers:
+            w.start()
+
+    @staticmethod
+    def worker_fn(
+        path: str,
+        start: int,
+        end: int,
+        q: Queue,
+        id_field: str,
+        fields,
+        apply_src_numpy_shape,
+        src_field,
+        target_field,
+        transform,
+        target_transform,
+    ):
+        print("worker start ", start, " ", end)
+        i = 0
+        _filter = None
+        if end > 0 and start >= 0:
+            _filter = (pc.field(id_field) >= pc.scalar(start)) & (
+                pc.field(id_field) <= pc.scalar(end)
+            )
+        delta_table = DeltaTable(path)
+        scanner = delta_table.to_pyarrow_dataset().scanner(
+            columns=fields, filter=_filter
+        )
+        for rb in scanner.to_reader():
+            pylist = rb.to_pylist()
+            for item in pylist:
+                if apply_src_numpy_shape is not None:
+                    item[src_field] = np.frombuffer(
+                        item[src_field], dtype=np.uint8
+                    ).reshape(apply_src_numpy_shape)
+                if transform is not None:
+                    item[src_field] = transform(item[src_field])
+                if target_transform is not None:
+                    item[target_field] = target_transform(item[target_field])
+                try:
+                    q.put((item[src_field], item[target_field]), block=True, timeout=10)
+                    i += 1
+                except queue.Full:
+                    print("full")
+        print(i, " ", start, " ", end)
 
     def count(self):
         _cnt = 0
         for rb in self.init_scanner_and_apply_rank().to_reader():
             _cnt += rb.num_rows
         return _cnt
+
     def init_scanner_and_apply_rank(self):
         _info = get_worker_info()
         if self.use_fixed_rank:
@@ -83,8 +158,10 @@ class DeltaIterableDataset(IterableDataset):
                 per_worker = int(math.ceil((self.end - self.start) / float(num_ranks)))
                 iter_start = self.start + rank * per_worker
                 iter_end = min(iter_start + per_worker, self.end)
-                _filter = (pc.field(self.id_field) >= pc.scalar(iter_start)) & (pc.field(self.id_field) <= pc.scalar(iter_end))
-                #pc.bit_wise_and(pc.field(self.id_field), pc.scalar(num_ranks - 1)) == pc.scalar(rank)
+                _filter = (pc.field(self.id_field) >= pc.scalar(iter_start)) & (
+                    pc.field(self.id_field) <= pc.scalar(iter_end)
+                )
+                # pc.bit_wise_and(pc.field(self.id_field), pc.scalar(num_ranks - 1)) == pc.scalar(rank)
 
             self.scanner = self.delta_table.to_pyarrow_dataset().scanner(
                 columns=self.fields, filter=_filter
@@ -92,21 +169,30 @@ class DeltaIterableDataset(IterableDataset):
         return self.scanner
 
     def __iter__(self):
-        for rb in self.init_scanner_and_apply_rank().to_reader():
-            pylist = rb.to_pylist()
-            if self.batch_size:
-                for i in range(0, len(pylist), self.batch_size):
-                    yield pylist[i : i + self.batch_size]
-            else:
-                for item in pylist:
-                    if self.apply_src_numpy_shape is not None:
-                        item[self.src_field] = np.frombuffer(item[self.src_field], dtype=np.uint8).reshape(self.apply_src_numpy_shape)
-                    if self.transform is not None:
-                        item[self.src_field] = self.transform(item[self.src_field])
-                    if self.target_transform is not None:
-                        item[self.target_field] = self.target_transform(item[self.target_field])
-                    yield item[self.src_field], item[self.target_field]
+        i = 0
+        while True:
+            try:
+                item = self.queue.get(block=True, timeout=5)
+                yield item
+                i += 1
+            except Empty:
+                print("\nEmpty ", i)
+                return
+
+        # for rb in self.init_scanner_and_apply_rank().to_reader():
+        #     pylist = rb.to_pylist()
+        #     if self.batch_size:
+        #         for i in range(0, len(pylist), self.batch_size):
+        #             yield pylist[i : i + self.batch_size]
+        #     else:
+        #         for item in pylist:
+        #             if self.apply_src_numpy_shape is not None:
+        #                 item[self.src_field] = np.frombuffer(item[self.src_field], dtype=np.uint8).reshape(self.apply_src_numpy_shape)
+        #             if self.transform is not None:
+        #                 item[self.src_field] = self.transform(item[self.src_field])
+        #             if self.target_transform is not None:
+        #                 item[self.target_field] = self.target_transform(item[self.target_field])
+        #             yield item[self.src_field], item[self.target_field]
 
     def __len__(self):
         return self.end
-
