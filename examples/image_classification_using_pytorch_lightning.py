@@ -218,7 +218,7 @@ if __name__ == "__main__":
     # Initialize a trainer
     trainer = pl.Trainer(
         accelerator="gpu",
-        max_epochs=1,
+        max_epochs=5,
         # gpus=0,
         # callbacks=[early_stop_callback, checkpoint_callback],
     )

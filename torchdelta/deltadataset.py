@@ -2,6 +2,8 @@ import math
 import queue
 from multiprocessing import Queue, Process
 from queue import Empty
+import random
+from time import sleep
 
 import numpy as np
 from deltalake import DeltaTable
@@ -29,6 +31,7 @@ class DeltaIterableDataset(IterableDataset):
         fixed_rank: int = None,
         num_ranks: int = None,
         num_workers: int = 2,
+        shuffle: bool = False,
     ) -> None:
         """
 
@@ -57,12 +60,13 @@ class DeltaIterableDataset(IterableDataset):
         self.apply_src_numpy_shape = apply_src_numpy_shape
         self.transform = transform
         self.target_transform = target_transform
+        self.shuffle = shuffle
 
         self.delta_table = None
         self.scanner = None
         self.start = 0
         self.end = self.count()
-        self.queue = Queue()
+        self.queue = Queue(maxsize=10000)
         self.delta_table = None
         self.scanner = None
         self.workers = [
@@ -73,6 +77,7 @@ class DeltaIterableDataset(IterableDataset):
                     i * self.end / self.num_workers,
                     (i + 1) * self.end / self.num_workers,
                     self.queue,
+                    self.shuffle,
                     self.id_field,
                     self.fields,
                     self.apply_src_numpy_shape,
@@ -94,6 +99,7 @@ class DeltaIterableDataset(IterableDataset):
         start: int,
         end: int,
         q: Queue,
+        shuffle: bool,
         id_field: str,
         fields,
         apply_src_numpy_shape,
@@ -102,34 +108,51 @@ class DeltaIterableDataset(IterableDataset):
         transform,
         target_transform,
     ):
-        print("worker start ", start, " ", end)
-        i = 0
-        _filter = None
-        if end > 0 and start >= 0:
-            _filter = (pc.field(id_field) >= pc.scalar(start)) & (
-                pc.field(id_field) <= pc.scalar(end)
+        try:
+            print("worker start ", start, " ", end)
+            i = 0
+            _filter = None
+            if end > 0 and start >= 0:
+                _filter = (pc.field(id_field) >= pc.scalar(start)) & (
+                    pc.field(id_field) <= pc.scalar(end)
+                )
+            delta_table = DeltaTable(path)
+            scanner = delta_table.to_pyarrow_dataset().scanner(
+                columns=fields, filter=_filter
             )
-        delta_table = DeltaTable(path)
-        scanner = delta_table.to_pyarrow_dataset().scanner(
-            columns=fields, filter=_filter
-        )
-        for rb in scanner.to_reader():
-            pylist = rb.to_pylist()
-            for item in pylist:
-                if apply_src_numpy_shape is not None:
-                    item[src_field] = np.frombuffer(
-                        item[src_field], dtype=np.uint8
-                    ).reshape(apply_src_numpy_shape)
-                if transform is not None:
-                    item[src_field] = transform(item[src_field])
-                if target_transform is not None:
-                    item[target_field] = target_transform(item[target_field])
-                try:
-                    q.put((item[src_field], item[target_field]), block=True, timeout=10)
-                    i += 1
-                except queue.Full:
-                    print("full")
-        print(i, " ", start, " ", end)
+            while True:
+                for rb in scanner.to_reader():
+                    pylist = rb.to_pylist()
+                    if shuffle:
+                        indexes = [
+                            random.randint(0, len(pylist)) for _ in range(len(pylist))
+                        ]
+                    else:
+                        indexes = list(range(len(pylist)))
+
+                    for i in indexes:
+                        item = pylist[i]
+                        if apply_src_numpy_shape is not None:
+                            item[src_field] = np.frombuffer(
+                                item[src_field], dtype=np.uint8
+                            ).reshape(apply_src_numpy_shape)
+                        if transform is not None:
+                            item[src_field] = transform(item[src_field])
+                        if target_transform is not None:
+                            item[target_field] = target_transform(item[target_field])
+                        try:
+                            q.put(
+                                (item[src_field], item[target_field]),
+                                block=True,
+                                timeout=100,
+                            )
+                            i += 1
+                        except queue.Full:
+                            print("full")
+            # print("Finished reading: ", i, " ", start, " ", end)
+            # sleep(1000)
+        except Exception as e:
+            print(e)
 
     def count(self):
         _cnt = 0
@@ -172,9 +195,11 @@ class DeltaIterableDataset(IterableDataset):
         i = 0
         while True:
             try:
-                item = self.queue.get(block=True, timeout=5)
+                item = self.queue.get(block=True, timeout=150)
                 yield item
                 i += 1
+                if i >= self.end:
+                    return
             except Empty:
                 print("\nEmpty ", i)
                 return
@@ -196,3 +221,7 @@ class DeltaIterableDataset(IterableDataset):
 
     def __len__(self):
         return self.end
+
+    def __del__(self):
+        for p in self.workers:
+            p.kill()

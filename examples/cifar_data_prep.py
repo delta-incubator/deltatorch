@@ -34,7 +34,7 @@ else:
 # COMMAND ----------
 
 
-def prepare_cifar_data(is_train: bool = True, iter_count: int = 2):
+def prepare_cifar_data(is_train: bool = True, iter_count: int = 1):
     dataset = CIFAR10(".", train=is_train, download=True)
     df = None
     for i in range(iter_count):
