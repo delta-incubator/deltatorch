@@ -79,7 +79,8 @@ class CIFAR10DataModule(pl.LightningDataModule):
             use_fixed_rank=False,
             transform=self.transform,
             apply_src_numpy_shape=(32, 32, 3),
-            num_workers=num_workers if num_workers > 0 else 2
+            num_workers=num_workers if num_workers > 0 else 2,
+            shuffle=True
             # fixed_rank=3,
             # num_ranks=4,
         )
@@ -93,7 +94,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
             f"{train_read_path}_train.delta",
             shuffle=False,
             batch_size=128,
-            num_workers=8,
+            num_workers=8
         )
 
     def val_dataloader(self):

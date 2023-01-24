@@ -123,12 +123,9 @@ class DeltaIterableDataset(IterableDataset):
             while True:
                 for rb in scanner.to_reader():
                     pylist = rb.to_pylist()
+                    indexes = list(range(len(pylist)))
                     if shuffle:
-                        indexes = [
-                            random.randint(0, len(pylist)) for _ in range(len(pylist))
-                        ]
-                    else:
-                        indexes = list(range(len(pylist)))
+                        random.shuffle(indexes)
 
                     for i in indexes:
                         item = pylist[i]
