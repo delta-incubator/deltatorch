@@ -1,3 +1,4 @@
+import io
 import math
 import queue
 from multiprocessing import Queue, Process
@@ -6,8 +7,9 @@ import random
 from time import sleep
 
 import numpy as np
+from PIL import Image
 from deltalake import DeltaTable
-from torch.utils.data import get_worker_info, Dataset, IterableDataset
+from torch.utils.data import get_worker_info, Dataset, IterableDataset, DataLoader
 import pyarrow.dataset as ds
 import pyarrow.compute as pc
 from typing import List, Optional, Callable
@@ -25,6 +27,7 @@ class DeltaIterableDataset(IterableDataset):
         target_field: str,
         batch_size: int = None,
         apply_src_numpy_shape=None,
+        load_pil: bool = False,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         use_fixed_rank: bool = False,
@@ -33,16 +36,7 @@ class DeltaIterableDataset(IterableDataset):
         num_workers: int = 2,
         shuffle: bool = False,
     ) -> None:
-        """
 
-        :param path:
-        :param fields:
-        :param id_field:
-        :param batch_size:
-        :param return_type: "pylist", "pydict", "pandas"
-        :param key_field:
-        :param val_field:
-        """
         super().__init__()
         self.path = path
         self.fields = {
@@ -58,6 +52,7 @@ class DeltaIterableDataset(IterableDataset):
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.apply_src_numpy_shape = apply_src_numpy_shape
+        self.load_pil = load_pil
         self.transform = transform
         self.target_transform = target_transform
         self.shuffle = shuffle
@@ -66,7 +61,7 @@ class DeltaIterableDataset(IterableDataset):
         self.scanner = None
         self.start = 0
         self.end = self.count()
-        self.queue = Queue(maxsize=10000)
+        self.queue = Queue(maxsize=20000)
         self.delta_table = None
         self.scanner = None
         self.workers = [
@@ -81,6 +76,7 @@ class DeltaIterableDataset(IterableDataset):
                     self.id_field,
                     self.fields,
                     self.apply_src_numpy_shape,
+                    self.load_pil,
                     self.src_field,
                     self.target_field,
                     self.transform,
@@ -88,7 +84,7 @@ class DeltaIterableDataset(IterableDataset):
                 ),
                 daemon=True,
             )
-            for i in range(self.num_workers + 1)
+            for i in range(self.num_workers)
         ]
         for w in self.workers:
             w.start()
@@ -103,6 +99,7 @@ class DeltaIterableDataset(IterableDataset):
         id_field: str,
         fields,
         apply_src_numpy_shape,
+        load_pil,
         src_field,
         target_field,
         transform,
@@ -133,6 +130,8 @@ class DeltaIterableDataset(IterableDataset):
                             item[src_field] = np.frombuffer(
                                 item[src_field], dtype=np.uint8
                             ).reshape(apply_src_numpy_shape)
+                        if load_pil:
+                            item[src_field] = Image.open(io.BytesIO(item[src_field]))
                         if transform is not None:
                             item[src_field] = transform(item[src_field])
                         if target_transform is not None:
