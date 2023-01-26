@@ -211,9 +211,7 @@ class DeltaIterableDataset(IterableDataset):
                 if not alive:
                     print("\Exiting ", i)
                     return
-                
 
-        
     def __len__(self):
         return self.end
 

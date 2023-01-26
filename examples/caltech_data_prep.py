@@ -33,7 +33,7 @@ if locals().get("spark") is None:
     )
 else:
     train_read_path = f"/dbfs{train_read_path}"
-    #temp_path = f"/dbfs{temp_path}"
+    # temp_path = f"/dbfs{temp_path}"
 
 
 # COMMAND ----------
@@ -123,5 +123,3 @@ f"{spark_write_path}_train.delta"
 # MAGIC %sql select count(1) from delta.`/tmp/msh/datasets/caltech256_duplicated_test.delta`
 
 # COMMAND ----------
-
-

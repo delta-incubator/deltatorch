@@ -3,34 +3,27 @@
 
 # COMMAND ----------
 
-from functools import partial
-
-import pandas as pd
-import numpy as np
 import pytorch_lightning as pl
 
 import torch
-from PIL import Image
 from torch import nn
 from torch.nn import functional as F
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import DataLoader
 
 from torchmetrics import Accuracy
 
 from torchvision import transforms, models
-from torchvision.datasets import CIFAR10
 
-from torchdelta import DeltaDataPipe
 from torchdelta.deltadataset import DeltaIterableDataset
 
 # COMMAND ----------
 
-#spark_write_path = "/tmp/msh/datasets/caltech256"
+# spark_write_path = "/tmp/msh/datasets/caltech256"
 train_read_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated"
 
-#train_read_path = "/tmp/datasets/caltech256"
+# train_read_path = "/tmp/datasets/caltech256"
 
-#if locals().get("spark") is not None:
+# if locals().get("spark") is not None:
 #    train_read_path = f"/dbfs{train_read_path}"
 
 # COMMAND ----------
@@ -42,11 +35,11 @@ class DeltaDataModule(pl.LightningDataModule):
 
         self.transform = transforms.Compose(
             [
-                transforms.Lambda(lambda x: x.convert('RGB')),
+                transforms.Lambda(lambda x: x.convert("RGB")),
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
                 transforms.ToTensor(),
-                 transforms.Normalize(
+                transforms.Normalize(
                     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
                 ),
             ]
@@ -72,9 +65,11 @@ class DeltaDataModule(pl.LightningDataModule):
         )
 
         return DataLoader(
-            #Caltech256(root='/tmp', download=True, transform=self.transform ), 
+            # Caltech256(root='/tmp', download=True, transform=self.transform ),
             dataset,
-            batch_size=batch_size, shuffle=False, num_workers=0
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
         )
 
     def train_dataloader(self):
@@ -98,7 +93,7 @@ class LitModel(pl.LightningModule):
 
         self.save_hyperparameters()
         self.learning_rate = learning_rate
-       
+
         self.fc1 = nn.Linear(1000, num_classes)
 
         self.accuracy = Accuracy(task="multiclass", num_classes=num_classes)
@@ -107,12 +102,9 @@ class LitModel(pl.LightningModule):
             weights=models.MobileNet_V3_Large_Weights.DEFAULT
         )
 
-   
     def forward(self, x):
         x = self.model(x)
         x = x.view(x.size(0), -1)
-        # x = F.relu(self.fc1(x))
-        # x = F.relu(self.fc2(x))
         x = F.log_softmax(self.fc1(x), dim=1)
 
         return x
@@ -122,7 +114,6 @@ class LitModel(pl.LightningModule):
         logits = self(x)
         loss = F.nll_loss(logits, y)
 
-        # training metrics
         preds = torch.argmax(logits, dim=1)
         acc = self.accuracy(preds, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
@@ -161,22 +152,22 @@ class LitModel(pl.LightningModule):
 
 if __name__ == "__main__":
 
-    torch.set_float32_matmul_precision('medium')
+    torch.set_float32_matmul_precision("medium")
 
     dm = DeltaDataModule()
 
     model = LitModel(dm.num_classes)
 
-    #early_stop_callback = pl.callbacks.EarlyStopping(monitor="val_loss")
-    #checkpoint_callback = pl.callbacks.ModelCheckpoint()
+    # early_stop_callback = pl.callbacks.EarlyStopping(monitor="val_loss")
+    # checkpoint_callback = pl.callbacks.ModelCheckpoint()
 
     # Initialize a trainer
     trainer = pl.Trainer(
         accelerator="gpu",
         max_epochs=5,
-        #auto_scale_batch_size=True,
+        # auto_scale_batch_size=True,
         # reload_dataloaders_every_n_epochs=1
-        #gpus=1,
+        # gpus=1,
         # callbacks=[early_stop_callback, checkpoint_callback],
     )
 
@@ -184,8 +175,6 @@ if __name__ == "__main__":
     trainer.fit(model, dm)
 
     # Evaluate the model on the held-out test set ⚡⚡
-    #trainer.test(dataloaders=dm.test_dataloader())
+    # trainer.test(dataloaders=dm.test_dataloader())
 
 # COMMAND ----------
-
-
