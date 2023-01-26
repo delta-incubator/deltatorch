@@ -29,6 +29,7 @@ spark_write_path = "/tmp/msh/datasets/cifar"
 train_read_path = "/tmp/msh/datasets/cifar"
 if locals().get("spark") is not None:
     train_read_path = f"/dbfs{train_read_path}"
+
 # COMMAND ----------
 
 
@@ -94,7 +95,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
             f"{train_read_path}_train.delta",
             shuffle=False,
             batch_size=128,
-            num_workers=8
+            num_workers=4
         )
 
     def val_dataloader(self):

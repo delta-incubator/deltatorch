@@ -1,7 +1,8 @@
 import io
 import math
 import queue
-from multiprocessing import Queue, Process
+from queue import Queue
+from threading import Thread
 from queue import Empty
 import random
 from time import sleep
@@ -61,11 +62,11 @@ class DeltaIterableDataset(IterableDataset):
         self.scanner = None
         self.start = 0
         self.end = self.count()
-        self.queue = Queue(maxsize=20000)
+        self.queue = Queue(maxsize=10000)
         self.delta_table = None
         self.scanner = None
         self.workers = [
-            Process(
+            Thread(
                 target=self.worker_fn,
                 args=(
                     self.path,
@@ -88,6 +89,8 @@ class DeltaIterableDataset(IterableDataset):
         ]
         for w in self.workers:
             w.start()
+        sleep(10)
+        print(self.workers)
 
     @staticmethod
     def worker_fn(
@@ -140,11 +143,13 @@ class DeltaIterableDataset(IterableDataset):
                             q.put(
                                 (item[src_field], item[target_field]),
                                 block=True,
-                                timeout=100,
+                                timeout=60,
                             )
                             i += 1
                         except queue.Full:
                             print("full")
+                        except Exception as e:
+                            print(e)
             # print("Finished reading: ", i, " ", start, " ", end)
             # sleep(1000)
         except Exception as e:
@@ -191,33 +196,28 @@ class DeltaIterableDataset(IterableDataset):
         i = 0
         while True:
             try:
-                item = self.queue.get(block=True, timeout=150)
+                item = self.queue.get(block=True, timeout=15)
                 yield item
                 i += 1
                 if i >= self.end:
                     return
             except Empty:
-                print("\nEmpty ", i)
-                return
+                alive = False
+                print(self.workers)
+                for w in self.workers:
+                    if w.is_alive():
+                        alive = True
+                        print("\nEmpty ", i)
+                if not alive:
+                    print("\Exiting ", i)
+                    return
+                
 
-        # for rb in self.init_scanner_and_apply_rank().to_reader():
-        #     pylist = rb.to_pylist()
-        #     if self.batch_size:
-        #         for i in range(0, len(pylist), self.batch_size):
-        #             yield pylist[i : i + self.batch_size]
-        #     else:
-        #         for item in pylist:
-        #             if self.apply_src_numpy_shape is not None:
-        #                 item[self.src_field] = np.frombuffer(item[self.src_field], dtype=np.uint8).reshape(self.apply_src_numpy_shape)
-        #             if self.transform is not None:
-        #                 item[self.src_field] = self.transform(item[self.src_field])
-        #             if self.target_transform is not None:
-        #                 item[self.target_field] = self.target_transform(item[self.target_field])
-        #             yield item[self.src_field], item[self.target_field]
-
+        
     def __len__(self):
         return self.end
 
     def __del__(self):
         for p in self.workers:
             p.kill()
+            p.terminate()
