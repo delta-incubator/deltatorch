@@ -19,7 +19,7 @@ from torchdelta.deltadataset import DeltaIterableDataset
 # COMMAND ----------
 
 # spark_write_path = "/tmp/msh/datasets/caltech256"
-train_read_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated"
+train_read_path = "/dbfs/tmp/msh/datasets/caltech256"
 
 # train_read_path = "/tmp/datasets/caltech256"
 
@@ -63,9 +63,10 @@ class DeltaDataModule(pl.LightningDataModule):
             # fixed_rank=3,
             # num_ranks=4,
         )
+        
 
         return DataLoader(
-            # Caltech256(root='/tmp', download=True, transform=self.transform ),
+            #Caltech256(root='/tmp', download=True, transform=self.transform ),
             dataset,
             batch_size=batch_size,
             shuffle=False,
@@ -175,6 +176,4 @@ if __name__ == "__main__":
     trainer.fit(model, dm)
 
     # Evaluate the model on the held-out test set ⚡⚡
-    # trainer.test(dataloaders=dm.test_dataloader())
-
-# COMMAND ----------
+    trainer.test(dataloaders=dm.test_dataloader())
