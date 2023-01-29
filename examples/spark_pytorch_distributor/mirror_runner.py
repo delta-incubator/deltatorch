@@ -32,13 +32,15 @@ class MirrorRunner:
     See more at https://www.pytorch.org/tutorials/distributed_training (nonexistent for now)
     """
 
-    def __init__(self,
-                 *,
-                 num_slots,
-                 local_mode=False,
-                 use_gpu=True,
-                 gpu_resource_name='gpu',
-                 use_custom_strategy=False):
+    def __init__(
+        self,
+        *,
+        num_slots,
+        local_mode=False,
+        use_gpu=True,
+        gpu_resource_name="gpu",
+        use_custom_strategy=False,
+    ):
         """
         Args:
             num_slots: Total number of GPUs or CPU only Spark tasks that
@@ -100,29 +102,33 @@ class MirrorRunner:
         """
         self._logger = _get_logger(self.__class__.__name__)
         self._num_slots = num_slots
-        
+
         if num_slots <= 0:
-            raise ValueError(f'num_slots is set to {num_slots} but '
-                             'cannot be less than or equal to 0.')
+            raise ValueError(
+                f"num_slots is set to {num_slots} but "
+                "cannot be less than or equal to 0."
+            )
         self._local_mode = local_mode
         self._use_gpu = use_gpu
         self._gpu_resource_name = gpu_resource_name
         self._use_custom_strategy = use_custom_strategy
         if self._use_gpu:
-            self._logger.info('Doing GPU training...')
+            self._logger.info("Doing GPU training...")
         else:
-            self._logger.info('Doing CPU training...')
+            self._logger.info("Doing CPU training...")
         spark = SparkSession.builder.getOrCreate()
         self.sc = spark.sparkContext
         if self._local_mode is True:
-            self._logger.warning('MirrorRunner will run in '
-                                 'local mode on the driver node. '
-                                 'There would be resource contention if '
-                                 'the driver also runs other workloads.')
+            self._logger.warning(
+                "MirrorRunner will run in "
+                "local mode on the driver node. "
+                "There would be resource contention if "
+                "the driver also runs other workloads."
+            )
             self._num_tasks = None
         else:
             self._num_tasks = self.get_num_tasks()
-            self._logger.info(f'Will run with {self._num_tasks} Spark tasks.')
+            self._logger.info(f"Will run with {self._num_tasks} Spark tasks.")
 
     def get_num_tasks(self):
         """
@@ -130,18 +136,22 @@ class MirrorRunner:
             The number of Spark tasks to use for distributed training
         """
         if self._use_gpu:
-            key = f'spark.task.resource.{self._gpu_resource_name}.amount'
+            key = f"spark.task.resource.{self._gpu_resource_name}.amount"
             if not self.sc.getConf().contains(key):
-                raise Exception('Your cluster might not have '
-                                'Spark GPU-aware scheduling enabled, '
-                                'please contact your cluster administrator.'
-                                f'The conf `{key}` was not found '
-                                'in the Spark configuration.')
+                raise Exception(
+                    "Your cluster might not have "
+                    "Spark GPU-aware scheduling enabled, "
+                    "please contact your cluster administrator."
+                    f"The conf `{key}` was not found "
+                    "in the Spark configuration."
+                )
             task_gpu_amount = int(self.sc.getConf().get(key))
             if task_gpu_amount < 1:
-                raise ValueError(f'The Spark conf `{key}` has a value '
-                                 f'of {task_gpu_amount} but it '
-                                 'should not have a value less than 1.')
+                raise ValueError(
+                    f"The Spark conf `{key}` has a value "
+                    f"of {task_gpu_amount} but it "
+                    "should not have a value less than 1."
+                )
             return math.ceil(self._num_slots / task_gpu_amount)
         return self._num_slots
 
@@ -165,52 +175,56 @@ class MirrorRunner:
 
         # Run in local mode
         if self._local_mode:
-            old_cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES',
-                                                      '')
-            cuda_state_was_set = 'CUDA_VISIBLE_DEVICES' in os.environ
+            old_cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+            cuda_state_was_set = "CUDA_VISIBLE_DEVICES" in os.environ
             try:
                 if self._use_gpu:
                     # TODO: handle the case that driver gpu resources
                     #       is not properly configured
                     gpus_owned = MirrorRunner._get_gpus_owned(
-                        self.sc.resources, self._gpu_resource_name)
+                        self.sc.resources, self._gpu_resource_name
+                    )
                     num_gpus_owned = len(gpus_owned)
                     if self._num_slots > num_gpus_owned:
                         raise ValueError(
-                            f'{self._num_slots} slots were requested '
-                            'for local training with '
-                            f'GPU training but only {num_gpus_owned} GPUs '
-                            'were available.')
+                            f"{self._num_slots} slots were requested "
+                            "for local training with "
+                            f"GPU training but only {num_gpus_owned} GPUs "
+                            "were available."
+                        )
                     # TODO: Check GPU utilization to avoid resource contention
-                    os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(
-                        str(e)
-                        for e in random.sample(gpus_owned, self._num_slots))
+                    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+                        str(e) for e in random.sample(gpus_owned, self._num_slots)
+                    )
                 else:
                     if self._num_slots > 1:
-                        raise ValueError(f'Cannot run with more than 1 CPU '
-                                         'machine in local mode. '
-                                         'Try setting num_slots to -1.')
-                    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+                        raise ValueError(
+                            f"Cannot run with more than 1 CPU "
+                            "machine in local mode. "
+                            "Try setting num_slots to -1."
+                        )
+                    os.environ["CUDA_VISIBLE_DEVICES"] = ""
                 result = MirrorRunner._run_pytorch_program(
-                    train_fn, self._use_custom_strategy, **kwargs)
+                    train_fn, self._use_custom_strategy, **kwargs
+                )
             finally:
                 if cuda_state_was_set:
-                    os.environ[
-                        'CUDA_VISIBLE_DEVICES'] = old_cuda_visible_devices
+                    os.environ["CUDA_VISIBLE_DEVICES"] = old_cuda_visible_devices
                 else:
-                    del os.environ['CUDA_VISIBLE_DEVICES']
+                    del os.environ["CUDA_VISIBLE_DEVICES"]
             return result
 
         # Run in distributed mode
         self._check_encryption()
-        self._logger.info('Distributed training in progress...')
-        self._logger.info(
-            'View Spark executor stderr logs to inspect training...')
-        result = self.sc.parallelize(range(self._num_tasks), self._num_tasks) \
-            .barrier() \
-            .mapPartitions(spark_task_program) \
+        self._logger.info("Distributed training in progress...")
+        self._logger.info("View Spark executor stderr logs to inspect training...")
+        result = (
+            self.sc.parallelize(range(self._num_tasks), self._num_tasks)
+            .barrier()
+            .mapPartitions(spark_task_program)
             .collect()[0]
-        self._logger.info(f'Training with {self._num_slots} slots is complete!')
+        )
+        self._logger.info(f"Training with {self._num_slots} slots is complete!")
         return result
 
     @staticmethod
@@ -222,30 +236,33 @@ class MirrorRunner:
         """
         if gpu_resource_name in resources:
             addresses = resources[gpu_resource_name].addresses
-            pattern = re.compile('^[1-9][0-9]*|0$')
+            pattern = re.compile("^[1-9][0-9]*|0$")
             if any(not pattern.match(address) for address in addresses):
-                raise ValueError(f'Found GPU addresses {addresses} which '
-                                 'are not all in the correct format '
-                                 'for CUDA_VISIBLE_DEVICES, which requires '
-                                 'integers with no zero padding.')
-            if 'CUDA_VISIBLE_DEVICES' in os.environ:
+                raise ValueError(
+                    f"Found GPU addresses {addresses} which "
+                    "are not all in the correct format "
+                    "for CUDA_VISIBLE_DEVICES, which requires "
+                    "integers with no zero padding."
+                )
+            if "CUDA_VISIBLE_DEVICES" in os.environ:
                 gpu_indices = list(map(int, addresses))
-                gpu_list = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
+                gpu_list = os.environ["CUDA_VISIBLE_DEVICES"].split(",")
                 gpu_owned = [gpu_list[i] for i in gpu_indices]
                 return gpu_owned
             return addresses
         raise ValueError(
-            f'The provided GPU resource name `{gpu_resource_name}` '
-            'was not found in the '
-            f'context resources. Contact your cluster administrator '
-            'to make sure that the '
-            f'spark.task.resource.{gpu_resource_name}, '
-            f'spark.worker.resource.{gpu_resource_name}, '
-            f'spark.executor.resource.{gpu_resource_name}, and '
-            f'spark.driver.resource.{gpu_resource_name} confs are '
-            'set and that the '
-            f'GPU resource name `{gpu_resource_name}` matches '
-            'those confs correctly.')
+            f"The provided GPU resource name `{gpu_resource_name}` "
+            "was not found in the "
+            f"context resources. Contact your cluster administrator "
+            "to make sure that the "
+            f"spark.task.resource.{gpu_resource_name}, "
+            f"spark.worker.resource.{gpu_resource_name}, "
+            f"spark.executor.resource.{gpu_resource_name}, and "
+            f"spark.driver.resource.{gpu_resource_name} confs are "
+            "set and that the "
+            f"GPU resource name `{gpu_resource_name}` matches "
+            "those confs correctly."
+        )
 
     # Runs the training function
     @staticmethod
@@ -254,6 +271,7 @@ class MirrorRunner:
 
             def _monitor_process(process_id):
                 import time
+
                 try:
                     while True:
                         process_has_crashed = False
@@ -263,42 +281,48 @@ class MirrorRunner:
                             continue
                         else:
                             if process_id.returncode != 0:
-                                print('process crashed')
+                                print("process crashed")
                                 process_has_crashed = True
                                 break
                             else:
-                                print('process finished')
+                                print("process finished")
                         if process_has_crashed or process_finished:
                             break
                         time.sleep(0.1)
                 except KeyboardInterrupt:
-                    print('terminate received')
+                    print("terminate received")
                     pass
-          
+
             from subprocess import Popen
-            process = Popen([r"python", '-m', 'torch.distributed.launch', 
-                              '--nproc_per_node=1',
-                               train_fn])
-          
-            #global child_pid
-            #child_pid = process.pid
+
+            process = Popen(
+                [
+                    r"python",
+                    "-m",
+                    "torch.distributed.launch",
+                    "--nproc_per_node=1",
+                    train_fn,
+                ]
+            )
+
+            # global child_pid
+            # child_pid = process.pid
             _monitor_process(process)
-            
+
             (output, error) = process.communicate()
 
             if error:
-                print("error: {0}".format(error)) 
+                print("error: {0}".format(error))
 
             # /databricks/python/bin/
             return output
 
-
         #    import tensorflow as tf
         #    from tensorflow.python.eager import context
-            # Reset the tenosrflow eager context to clear
-            # leftover state from previous runs
-            # Disable protected member access rule
-            # pylint: disable=protected-access
+        # Reset the tenosrflow eager context to clear
+        # leftover state from previous runs
+        # Disable protected member access rule
+        # pylint: disable=protected-access
         #    context._reset_context()
         #    strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy()
         #    with strategy.scope():
@@ -323,78 +347,77 @@ class MirrorRunner:
             from pyspark import BarrierTaskContext
             import atexit
 
-            #def kill_tasks(script):
+            # def kill_tasks(script):
             #    # as per https://leimao.github.io/blog/Kill-PyTorch-Distributed-Training-Processes/
             #    os.system("kill $(ps aux | grep {0} | grep -v grep | awk '{print $2}')".format(script))
 
             # Sets the TF_CONFIG env var so TF servers
             # can communicate with each other
             def set_torch_config(context):
-                addrs = [
-                    e.address.split(':')[0] for e in context.getTaskInfos()
-                ]
+                addrs = [e.address.split(":")[0] for e in context.getTaskInfos()]
                 my_addr = addrs[context.partitionId()]
-                with closing(socket.socket(socket.AF_INET,
-                                           socket.SOCK_STREAM)) as my_sock:
-                    my_sock.bind(('', 0))
+                with closing(
+                    socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                ) as my_sock:
+                    my_sock.bind(("", 0))
                     _, my_port = my_sock.getsockname()
                     my_endpoint = "{}:{}".format(my_addr, my_port)
                     worker_endpoints = context.allGather(my_endpoint)
-                #cluster = {'worker': worker_endpoints}
-                #tf_config = {
+                # cluster = {'worker': worker_endpoints}
+                # tf_config = {
                 #    'cluster': cluster,
                 #    'task': {
                 #        'type': 'worker',
                 #        'index': context.partitionId()
                 #    }
-                #}
-                
+                # }
+
                 # check TF cluster configs and see what my_port is?
                 #### Maybe we use the port ffor our Master Port
                 ## We can then use worker 0 as the master I think?
-                
-                #torch_config = {
-                  #'task_info': 'test',
+
+                # torch_config = {
+                #'task_info': 'test',
                 #  'master': str(addrs[0]),
                 #  'world_size': len(worker_endpoints),
                 #  'node_rank': str(context.partitionId())
-                #}
+                # }
 
-                #print(tf_config)
-                #print(torch_config)
+                # print(tf_config)
+                # print(torch_config)
 
-                os.environ['MASTER_PORT'] = '9340' # arbitrarily chosen can we attach to my_port properly?
-                os.environ['MASTER_ADDR'] = str(addrs[0])
-                os.environ['WORLD_SIZE'] = str(len(worker_endpoints))
-                os.environ['NODE_RANK'] = str(context.partitionId())
+                os.environ[
+                    "MASTER_PORT"
+                ] = "9340"  # arbitrarily chosen can we attach to my_port properly?
+                os.environ["MASTER_ADDR"] = str(addrs[0])
+                os.environ["WORLD_SIZE"] = str(len(worker_endpoints))
+                os.environ["NODE_RANK"] = str(context.partitionId())
 
             # Sets the CUDA_VISIBLE_DEVICES env var so only
             # the appropriate GPUS are used
             def set_gpus(context):
                 gpus_owned = MirrorRunner._get_gpus_owned(
-                    context.resources(), gpu_resource_name)
+                    context.resources(), gpu_resource_name
+                )
 
-                my_num_gpus = (num_slots //
-                               num_tasks) + (context.partitionId() <
-                                             (num_slots % num_tasks))
-                gpu_addresses = [
-                    str(e) for e in random.sample(gpus_owned, my_num_gpus)
-                ]
-                logging.info(f'Using GPU addresses: {gpu_addresses}')
-                os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(gpu_addresses)
-            
+                my_num_gpus = (num_slots // num_tasks) + (
+                    context.partitionId() < (num_slots % num_tasks)
+                )
+                gpu_addresses = [str(e) for e in random.sample(gpus_owned, my_num_gpus)]
+                logging.info(f"Using GPU addresses: {gpu_addresses}")
+                os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_addresses)
+
             context = BarrierTaskContext.get()
-            
+
             if use_gpu:
                 set_gpus(context)
             else:
-                os.environ['CUDA_VISIBLE_DEVICES'] = ''
+                os.environ["CUDA_VISIBLE_DEVICES"] = ""
             set_torch_config(context)
-            result = run_pytorch_program(train_fn, use_custom_strategy,
-                                            **kwargs)
-            
-            #atexit.register(kill_tasks)
-            
+            result = run_pytorch_program(train_fn, use_custom_strategy, **kwargs)
+
+            # atexit.register(kill_tasks)
+
             if context.partitionId() == 0:
                 return [result]
             return [None]
@@ -415,24 +438,29 @@ class MirrorRunner:
         """
         val = sc.getConf().get(key, default_value)
         lowercase_val = val.lower()
-        if lowercase_val == 'true':
+        if lowercase_val == "true":
             return True
-        if lowercase_val == 'false':
+        if lowercase_val == "false":
             return False
-        raise Exception("_getConfBoolean expected a boolean conf "
-                        "value but found value of type {} "
-                        "with value: {}".format(type(val), val))
+        raise Exception(
+            "_getConfBoolean expected a boolean conf "
+            "value but found value of type {} "
+            "with value: {}".format(type(val), val)
+        )
 
     # Protects users that want to use encryption
     # against passing around unencrypted data
     def _check_encryption(self):
         is_ssl_enabled = MirrorRunner._get_conf_boolean(
-            self.sc, 'spark.ssl.enabled', 'false')
+            self.sc, "spark.ssl.enabled", "false"
+        )
         ignore_ssl = MirrorRunner._get_conf_boolean(
-            self.sc, 'tensorflow.spark.distributor.ignoreSsl', 'false')
+            self.sc, "tensorflow.spark.distributor.ignoreSsl", "false"
+        )
         if is_ssl_enabled:
             if ignore_ssl:
-                self._logger.warning('''
+                self._logger.warning(
+                    """
                     This cluster has TLS encryption enabled;
                     however, {name} does not
                     support data encryption in transit. 
@@ -443,9 +471,13 @@ class MirrorRunner:
                     note this will cause model 
                     parameters and possibly training data to 
                     be sent between nodes unencrypted.
-                    '''.format(name=self.__class__.__name__))
+                    """.format(
+                        name=self.__class__.__name__
+                    )
+                )
                 return
-            raise Exception('''
+            raise Exception(
+                """
                 This cluster has TLS encryption enabled; 
                 however, {name} does not support 
                 data encryption in transit. To override 
@@ -454,4 +486,7 @@ class MirrorRunner:
                 to 'true' in the Spark configuration. Please note this 
                 will cause model parameters and possibly training 
                 data to be sent between nodes unencrypted.
-                '''.format(name=self.__class__.__name__))
+                """.format(
+                    name=self.__class__.__name__
+                )
+            )

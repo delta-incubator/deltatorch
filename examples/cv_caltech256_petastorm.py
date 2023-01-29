@@ -31,8 +31,12 @@ train_read_path = "/dbfs/tmp/msh/datasets/caltech256"
 from pyspark.sql.functions import col
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
 
-train_df = spark.read.load("dbfs:/tmp/msh/datasets/caltech256_duplicated_train.delta").select(col("image"), col("label")) 
-test_df = spark.read.load("dbfs:/tmp/msh/datasets/caltech256_duplicated_test.delta").select(col("image"), col("label")) 
+train_df = spark.read.load(
+    "dbfs:/tmp/msh/datasets/caltech256_duplicated_train.delta"
+).select(col("image"), col("label"))
+test_df = spark.read.load(
+    "dbfs:/tmp/msh/datasets/caltech256_duplicated_test.delta"
+).select(col("image"), col("label"))
 
 num_classes = train_df.select("label").distinct().count()
 num_train_rows = train_df.count()
@@ -41,7 +45,10 @@ num_test_rows = test_df.count()
 # COMMAND ----------
 
 from petastorm.spark import make_spark_converter, SparkDatasetConverter
-spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///dbfs/tmp/petastorm/cache")
+
+spark.conf.set(
+    SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///dbfs/tmp/petastorm/cache"
+)
 
 # COMMAND ----------
 
@@ -60,21 +67,21 @@ class DeltaDataModule(pl.LightningDataModule):
         self.train_path = train_path
         self.test_path = test_path
 
-        #self.train_df = train_df
-        #self.test_df = test_df
+        # self.train_df = train_df
+        # self.test_df = test_df
 
-        #self.train_conv =  make_spark_converter(self.train_df)
-        #self.test_conv =  make_spark_converter(self.test_df)
+        # self.train_conv =  make_spark_converter(self.train_df)
+        # self.test_conv =  make_spark_converter(self.test_df)
 
         self.num_classes = 257
 
     def dataloader(self, path, batch_size):
-        #def get_petastorm_urls(df):
+        # def get_petastorm_urls(df):
         #    paths = df.inputFiles()
         #    return [path.replace('dbfs:/', 'file:///dbfs/') for path in paths]
 
         def preprocess(img):
-            image = Image.open(io.BytesIO(img)).convert('RGB')
+            image = Image.open(io.BytesIO(img)).convert("RGB")
             transform = transforms.Compose(
                 [
                     transforms.Resize(256),
@@ -89,21 +96,24 @@ class DeltaDataModule(pl.LightningDataModule):
 
         def transform_rows(batch):
             batch["image"] = batch["image"].map(lambda x: preprocess(x).numpy())
-            #batch = batch.drop(labels=["id"], axis=1)
+            # batch = batch.drop(labels=["id"], axis=1)
             return batch
 
         def get_transform_spec():
             return TransformSpec(
                 transform_rows,
                 edit_fields=[("image", np.float32, (3, 224, 224), False)],
-                selected_fields=["image", "label"])
+                selected_fields=["image", "label"],
+            )
 
-        #return self.train_conv.make_torch_dataloader(
+        # return self.train_conv.make_torch_dataloader(
         #    transform_spec=get_transform_spec(), num_epochs=1, batch_size=batch_size
-        #)
-        reader = make_batch_reader(path, num_epochs=None, transform_spec=get_transform_spec())
+        # )
+        reader = make_batch_reader(
+            path, num_epochs=None, transform_spec=get_transform_spec()
+        )
         return DataLoader(reader, batch_size=batch_size)
-        
+
     def train_dataloader(self):
         return self.dataloader(self.train_path, 256)
 
@@ -130,7 +140,7 @@ class LitModel(pl.LightningModule):
         )
 
     def forward(self, x):
-        
+
         x = self.model(x)
         x = x.view(x.size(0), -1)
         x = F.log_softmax(self.fc1(x), dim=1)
@@ -182,7 +192,10 @@ if __name__ == "__main__":
 
     torch.set_float32_matmul_precision("medium")
 
-    dm = DeltaDataModule(train_path=f"file://{train_read_path}_train.parquet", test_path=f"file://{train_read_path}_test.parquet")
+    dm = DeltaDataModule(
+        train_path=f"file://{train_read_path}_train.parquet",
+        test_path=f"file://{train_read_path}_test.parquet",
+    )
 
     model = LitModel(dm.num_classes)
 
@@ -193,7 +206,7 @@ if __name__ == "__main__":
     trainer = pl.Trainer(
         accelerator="gpu",
         max_epochs=1,
-        limit_train_batches=int(num_train_rows/256),
+        limit_train_batches=int(num_train_rows / 256),
         # auto_scale_batch_size=True,
         # reload_dataloaders_every_n_epochs=1
         # gpus=1,
@@ -207,5 +220,3 @@ if __name__ == "__main__":
     trainer.test(dataloaders=dm.test_dataloader())
 
 # COMMAND ----------
-
-

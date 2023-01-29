@@ -14,8 +14,9 @@ from torchdelta.deltadataset import DeltaIterableDataset
 
 train_read_path = "/dbfs/tmp/msh/datasets/caltech256"
 
+
 class DeltaDataModule(pl.LightningDataModule):
-    def __init__(self, rank:int=-1, num_ranks:int=-1):
+    def __init__(self, rank: int = -1, num_ranks: int = -1):
         super().__init__()
         self.rank = rank
         self.num_ranks = num_ranks
@@ -50,10 +51,9 @@ class DeltaDataModule(pl.LightningDataModule):
             rank=self.rank,
             num_ranks=self.num_ranks,
         )
-        
 
         return DataLoader(
-            #Caltech256(root='/tmp', download=True, transform=self.transform ),
+            # Caltech256(root='/tmp', download=True, transform=self.transform ),
             dataset,
             batch_size=batch_size,
             shuffle=False,
@@ -148,16 +148,16 @@ def main():
     # Initialize a trainer
     trainer = pl.Trainer(
         accelerator="gpu",
-        strategy="ddp", 
+        strategy="ddp",
         num_nodes=1,
         devices=4,
         max_epochs=5,
-        replace_sampler_ddp=False
+        replace_sampler_ddp=False,
     )
-      
+
     print(f"Local Rank: {trainer.local_rank}")
     print(f"World Size: {trainer.world_size}")
-    
+
     dm = DeltaDataModule(rank=trainer.local_rank, num_ranks=trainer.world_size)
 
     model = LitModel(dm.num_classes)
@@ -165,7 +165,7 @@ def main():
     trainer.fit(model, dm)
 
     trainer.test(dataloaders=dm.test_dataloader())
-    
-    
+
+
 if __name__ == "__main__":
-     main()
+    main()

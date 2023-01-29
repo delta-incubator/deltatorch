@@ -30,7 +30,7 @@ train_read_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated"
 
 
 class DeltaDataModule(pl.LightningDataModule):
-    def __init__(self, rank:int=-1, num_ranks:int=-1):
+    def __init__(self, rank: int = -1, num_ranks: int = -1):
         super().__init__()
         self.rank = rank
         self.num_ranks = num_ranks
@@ -65,7 +65,6 @@ class DeltaDataModule(pl.LightningDataModule):
             rank=self.rank,
             num_ranks=self.num_ranks,
         )
-        
 
         return DataLoader(
             dataset,
@@ -152,39 +151,38 @@ class LitModel(pl.LightningModule):
         return optimizer
 
 
-
-
 # COMMAND ----------
 
 import spark_pytorch_distributor.mirror_runner as mrr
 
 # COMMAND ----------
 
+
 def train_distributed():
-    
+
     torch.set_float32_matmul_precision("medium")
 
-   
-    #early_stop_callback = pl.callbacks.EarlyStopping(monitor="train_loss")
-    #checkpoint_callback = pl.callbacks.ModelCheckpoint()
+    # early_stop_callback = pl.callbacks.EarlyStopping(monitor="train_loss")
+    # checkpoint_callback = pl.callbacks.ModelCheckpoint()
 
     # Initialize a trainer
-    trainer = pl.Trainer(accelerator='gpu', 
-                        devices=1, 
-                        num_nodes=4, 
-                        strategy="ddp", 
-                        default_root_dir="/dbfs/tmp/trainer_logs",
-                        max_epochs=5,
-                        replace_sampler_ddp=False
-                        # auto_scale_batch_size=True,
-                        # reload_dataloaders_every_n_epochs=1
-                        # gpus=1,
-                        #callbacks=[early_stop_callback, checkpoint_callback],
+    trainer = pl.Trainer(
+        accelerator="gpu",
+        devices=1,
+        num_nodes=4,
+        strategy="ddp",
+        default_root_dir="/dbfs/tmp/trainer_logs",
+        max_epochs=5,
+        replace_sampler_ddp=False
+        # auto_scale_batch_size=True,
+        # reload_dataloaders_every_n_epochs=1
+        # gpus=1,
+        # callbacks=[early_stop_callback, checkpoint_callback],
     )
 
     print(f"Rank: {trainer.global_rank}")
     print(f"World Size: {trainer.world_size}")
-    
+
     dm = DeltaDataModule(rank=trainer.global_rank, num_ranks=trainer.world_size)
 
     model = LitModel(dm.num_classes)
@@ -192,12 +190,13 @@ def train_distributed():
     trainer.fit(model, dm)
 
     # trainer.test(dataloaders=dm.test_dataloader())
-    #return trainer 
+    # return trainer
+
 
 # COMMAND ----------
 
-trainer = mrr.MirrorRunner(num_slots=4, use_custom_strategy=True, local_mode=False).run(train_distributed)
+trainer = mrr.MirrorRunner(num_slots=4, use_custom_strategy=True, local_mode=False).run(
+    train_distributed
+)
 
 # COMMAND ----------
-
-

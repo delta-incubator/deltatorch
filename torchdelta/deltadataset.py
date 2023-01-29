@@ -71,21 +71,27 @@ class DeltaIterableDataset(IterableDataset):
             new_end = (self.rank + 1) * self.end / self.num_ranks
             self.start = new_start
             self.end = new_end
-            print(f'Using fixed rank.  Current rank: {self.rank} World size: {self.num_ranks}')
-            print(f'Start: {self.start} End: {self.end}')
+            print(
+                f"Using fixed rank.  Current rank: {self.rank} World size: {self.num_ranks}"
+            )
+            print(f"Start: {self.start} End: {self.end}")
         elif _info is not None:
             self.rank = _info.id
             self.num_ranks = _info.num_workers
-            print(f'Detected DDP process. Current rank: {self.rank} World size: {self.num_ranks}')
+            print(
+                f"Detected DDP process. Current rank: {self.rank} World size: {self.num_ranks}"
+            )
             new_start = self.rank * self.end / self.num_ranks
             new_end = (self.rank + 1) * self.end / self.num_ranks
-            print('This rank will use the follosing set of rows: {self.start}-{self.end}')
+            print(
+                "This rank will use the follosing set of rows: {self.start}-{self.end}"
+            )
             self.start = new_start
             self.end = new_end
 
         self.queue = Queue(maxsize=20000)
         self.stop_event = threading.Event()
-        
+
         self.delta_table = None
         self.scanner = None
         self.workers = [
@@ -93,8 +99,8 @@ class DeltaIterableDataset(IterableDataset):
                 target=self.worker_fn,
                 args=(
                     self.path,
-                    self.start + i * (self.end-self.start) / self.num_workers,
-                    self.start + (i + 1) * (self.end-self.start) / self.num_workers,
+                    self.start + i * (self.end - self.start) / self.num_workers,
+                    self.start + (i + 1) * (self.end - self.start) / self.num_workers,
                     self.queue,
                     self.stop_event,
                     self.shuffle,
@@ -113,7 +119,6 @@ class DeltaIterableDataset(IterableDataset):
         ]
         for w in self.workers:
             w.start()
-
 
     @staticmethod
     def worker_fn(
@@ -171,7 +176,7 @@ class DeltaIterableDataset(IterableDataset):
                             )
                             i += 1
                             if event.is_set():
-                              return
+                                return
                         except queue.Full:
                             print("full")
                         except Exception as e:
@@ -239,7 +244,7 @@ class DeltaIterableDataset(IterableDataset):
                     return
 
     def __len__(self):
-        return self.end-self.start
+        return self.end - self.start
 
     def __del__(self):
         self.stop_event.set()

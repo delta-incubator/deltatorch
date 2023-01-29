@@ -63,10 +63,9 @@ class DeltaDataModule(pl.LightningDataModule):
             # fixed_rank=3,
             # num_ranks=4,
         )
-        
 
         return DataLoader(
-            #Caltech256(root='/tmp', download=True, transform=self.transform ),
+            # Caltech256(root='/tmp', download=True, transform=self.transform ),
             dataset,
             batch_size=batch_size,
             shuffle=False,

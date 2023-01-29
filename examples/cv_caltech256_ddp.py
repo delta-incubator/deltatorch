@@ -7,4 +7,4 @@
 
 # COMMAND ----------
 
-# MAGIC %sh python cv_caltech256_ddp_script.py 
+# MAGIC %sh python cv_caltech256_ddp_script.py
