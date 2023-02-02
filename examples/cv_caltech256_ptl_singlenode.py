@@ -4,22 +4,18 @@
 # COMMAND ----------
 
 import pytorch_lightning as pl
-
 import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-
 from torchmetrics import Accuracy
-
 from torchvision import transforms, models
-
 from torchdelta.deltadataset import DeltaIterableDataset
 
 # COMMAND ----------
 
-# spark_write_path = "/tmp/msh/datasets/caltech256"
-train_read_path = "/dbfs/tmp/msh/datasets/caltech256"
+train_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x200_train.delta"
+test_path = "/dbfs/tmp/msh/datasets/caltech256_test.delta"
 
 # train_read_path = "/tmp/datasets/caltech256"
 
@@ -47,19 +43,20 @@ class DeltaDataModule(pl.LightningDataModule):
 
         self.num_classes = 257
 
-    def dataloader(self, path: str, shuffle=False, batch_size=32, num_workers=0):
+    def dataloader(self, path: str, length:int, shuffle=False, batch_size=32, num_workers=0):
         from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
 
         dataset = DeltaIterableDataset(
             path,
+            length=length,
             src_field="image",
             target_field="label",
             id_field="id",
-            use_fixed_rank=False,
             transform=self.transform,
             load_pil=True,
             num_workers=num_workers if num_workers > 0 else 2,
-            shuffle=True
+            shuffle=True,
+            use_fixed_rank=False,
             # fixed_rank=3,
             # num_ranks=4,
         )
@@ -74,17 +71,18 @@ class DeltaDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         return self.dataloader(
-            f"{train_read_path}_train.delta",
+            train_path,
+            length=5507180,
             shuffle=True,
             batch_size=384,
             num_workers=2,
         )
 
     def val_dataloader(self):
-        return self.dataloader(f"{train_read_path}_test.delta")
+        return self.dataloader(test_path, length=3054)
 
     def test_dataloader(self):
-        return self.dataloader(f"{train_read_path}_test.delta")
+        return self.dataloader(test_path, length=3054)
 
 
 class LitModel(pl.LightningModule):

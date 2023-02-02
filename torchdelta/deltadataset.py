@@ -23,6 +23,7 @@ class DeltaIterableDataset(IterableDataset):
     def __init__(
         self,
         path: str,
+        length: int,
         # fields: List[str],
         id_field: str,
         src_field: str,
@@ -62,7 +63,11 @@ class DeltaIterableDataset(IterableDataset):
         self.delta_table = None
         self.scanner = None
         self.start = 0
-        self.end = self.count()
+        if length is not None and length > 0 : 
+          self.end = length
+        else:
+          self.end = self.count()
+        print(f"Dataset for path {path}. Count:{self.end}")
 
         _info = get_worker_info()
 
@@ -89,7 +94,7 @@ class DeltaIterableDataset(IterableDataset):
             self.start = new_start
             self.end = new_end
 
-        self.queue = Queue(maxsize=20000)
+        self.queue = Queue(maxsize=10000)
         self.stop_event = threading.Event()
 
         self.delta_table = None
@@ -119,6 +124,7 @@ class DeltaIterableDataset(IterableDataset):
         ]
         for w in self.workers:
             w.start()
+        sleep(120)
 
     @staticmethod
     def worker_fn(
@@ -138,7 +144,7 @@ class DeltaIterableDataset(IterableDataset):
         target_transform,
     ):
         try:
-            print("Started worker: ", start, "-", end)
+            print(f"Started worker for path {path} and range: {start}-{end}")
             i = 0
             _filter = None
             if end > 0 and start >= 0:
@@ -151,13 +157,15 @@ class DeltaIterableDataset(IterableDataset):
             )
             while not event.is_set():
                 for rb in scanner.to_reader():
-                    pylist = rb.to_pylist()
-                    indexes = list(range(len(pylist)))
+                    num_rows = rb.num_rows
+                    #pylist = rb.to_pylist()
+                    indexes = list(range(num_rows))
                     if shuffle:
                         random.shuffle(indexes)
 
                     for i in indexes:
-                        item = pylist[i]
+                        item = rb.slice(offset=i, length=1).to_pylist()[0]
+                        #pylist[i]
                         if apply_src_numpy_shape is not None:
                             item[src_field] = np.frombuffer(
                                 item[src_field], dtype=np.uint8
@@ -172,26 +180,43 @@ class DeltaIterableDataset(IterableDataset):
                             q.put(
                                 (item[src_field], item[target_field]),
                                 block=True,
-                                timeout=60,
+                                timeout=360,
                             )
                             i += 1
                             if event.is_set():
                                 return
                         except queue.Full:
                             print("full")
+                            sleep(60)
                         except Exception as e:
                             print(e)
             # print("Finished reading: ", i, " ", start, " ", end)
             # sleep(1000)
         except Exception as e:
             print(e)
-
+    
+    def _get_active_spark_session(self):
+      try:
+          from pyspark.sql import SparkSession
+      except ImportError:
+          return None
+      try:
+          return SparkSession.getActiveSession()
+      except Exception:
+          return None
+    
     def count(self):
-        _cnt = 0
-        for rb in self.init_scanner().to_reader():
-            _cnt += rb.num_rows
-        return _cnt
-
+        spark = self._get_active_spark_session()
+        if spark is not None:
+            print("Using spark to determine length..")
+            _dbfs_path = self.path.replace("/dbfs/", "dbfs:/")
+            return spark.read.format("delta").load(_dbfs_path).count()
+        else:
+            _cnt = 0
+            for rb in self.init_scanner().to_reader():
+                _cnt += rb.num_rows
+            return _cnt
+          
     def init_scanner_and_apply_rank(self):
         _info = get_worker_info()
         if self.use_fixed_rank:
@@ -227,7 +252,7 @@ class DeltaIterableDataset(IterableDataset):
         i = self.start
         while True:
             try:
-                item = self.queue.get(block=True, timeout=15)
+                item = self.queue.get(block=True, timeout=60)
                 yield item
                 i += 1
                 if i >= self.end:

@@ -18,13 +18,8 @@ from torchdelta.deltadataset import DeltaIterableDataset
 
 # COMMAND ----------
 
-# spark_write_path = "/tmp/msh/datasets/caltech256"
-train_read_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated"
-
-# train_read_path = "/tmp/datasets/caltech256"
-
-# if locals().get("spark") is not None:
-#    train_read_path = f"/dbfs{train_read_path}"
+train_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x200_train.delta"
+test_path = "/dbfs/tmp/msh/datasets/caltech256_test.delta"
 
 # COMMAND ----------
 
@@ -49,11 +44,12 @@ class DeltaDataModule(pl.LightningDataModule):
 
         self.num_classes = 257
 
-    def dataloader(self, path: str, shuffle=False, batch_size=32, num_workers=0):
+    def dataloader(self, path: str, length:int, shuffle=False, batch_size=32, num_workers=0):
         from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
 
         dataset = DeltaIterableDataset(
             path,
+            length,
             src_field="image",
             target_field="label",
             id_field="id",
@@ -75,17 +71,18 @@ class DeltaDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         return self.dataloader(
-            f"{train_read_path}_train.delta",
+            train_path,
+            length=5507180,
             shuffle=True,
             batch_size=384,
             num_workers=2,
         )
 
     def val_dataloader(self):
-        return self.dataloader(f"{train_read_path}_test.delta")
-
+        return self.dataloader(test_path, length=3054)
+  
     def test_dataloader(self):
-        return self.dataloader(f"{train_read_path}_test.delta")
+        return self.dataloader(test_path, length=3054)
 
 
 class LitModel(pl.LightningModule):
@@ -169,7 +166,7 @@ def train_distributed():
     trainer = pl.Trainer(
         accelerator="gpu",
         devices=1,
-        num_nodes=4,
+        num_nodes=8,
         strategy="ddp",
         default_root_dir="/dbfs/tmp/trainer_logs",
         max_epochs=5,
@@ -195,8 +192,6 @@ def train_distributed():
 
 # COMMAND ----------
 
-trainer = mrr.MirrorRunner(num_slots=4, use_custom_strategy=True, local_mode=False).run(
+trainer = mrr.MirrorRunner(num_slots=8, use_custom_strategy=True, local_mode=False).run(
     train_distributed
 )
-
-# COMMAND ----------
