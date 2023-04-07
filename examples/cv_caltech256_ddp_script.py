@@ -139,7 +139,6 @@ class LitModel(pl.LightningModule):
 
 
 def main():
-
     torch.set_float32_matmul_precision("medium")
 
     # early_stop_callback = pl.callbacks.EarlyStopping(monitor="val_loss")

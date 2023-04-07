@@ -44,7 +44,9 @@ class DeltaDataModule(pl.LightningDataModule):
 
         self.num_classes = 257
 
-    def dataloader(self, path: str, length:int, shuffle=False, batch_size=32, num_workers=0):
+    def dataloader(
+        self, path: str, length: int, shuffle=False, batch_size=32, num_workers=0
+    ):
         from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
 
         dataset = DeltaIterableDataset(
@@ -80,7 +82,7 @@ class DeltaDataModule(pl.LightningDataModule):
 
     def val_dataloader(self):
         return self.dataloader(test_path, length=3054)
-  
+
     def test_dataloader(self):
         return self.dataloader(test_path, length=3054)
 
@@ -96,9 +98,7 @@ class LitModel(pl.LightningModule):
 
         self.accuracy = Accuracy(task="multiclass", num_classes=num_classes)
 
-        self.model = models.mobilenet_v3_large(
-            weights=models.MobileNet_V3_Large_Weights.DEFAULT
-        )
+        self.model = models.viresmobilenet_v3_large()
 
     def forward(self, x):
         x = self.model(x)
@@ -156,7 +156,6 @@ import spark_pytorch_distributor.mirror_runner as mrr
 
 
 def train_distributed():
-
     torch.set_float32_matmul_precision("medium")
 
     # early_stop_callback = pl.callbacks.EarlyStopping(monitor="train_loss")

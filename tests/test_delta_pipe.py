@@ -1,16 +1,20 @@
+from typing import Tuple
+
 from deltalake.writer import write_deltalake
 import pandas as pd
 from torchtext.datasets import AG_NEWS
 
 import pytest
 
-from torchdelta.deltapipe import DeltaDataPipe
+from torchdelta import DeltaIterableDataset
+from torchdelta.pytorch import create_pytorch_dataloader
 
 
 @pytest.fixture
-def delta_path(tmpdir) -> str:
+def delta_table_info(tmpdir) -> Tuple[str, int]:
     train_iter = AG_NEWS(split="train")
     train_list = list(train_iter)
+    train_len = len(train_list)
     classes, texts = list(zip(*train_list))
     df = pd.DataFrame(
         columns=["class", "text"], data={"class": list(classes), "text": texts}
@@ -18,36 +22,66 @@ def delta_path(tmpdir) -> str:
     df["id"] = range(len(df))
     _delta_path = str(tmpdir / "ag_news.delta")
     write_deltalake(_delta_path, df)
-    return _delta_path
+    return _delta_path, train_len
 
 
-def test_data_loader(delta_path):
-    num_ranks = 16
-    pipe = DeltaDataPipe(
-        delta_path, fields=["class", "text"], id_field="id", use_fixed_rank=False
-    )
-    pipe_with_rank = DeltaDataPipe(
+def test_simple_read(delta_table_info):
+    delta_path, train_len = delta_table_info
+    dataset = DeltaIterableDataset(
         delta_path,
-        fields=["class", "text"],
+        length=train_len,
         id_field="id",
-        use_fixed_rank=True,
-        fixed_rank=3,
-        num_ranks=num_ranks,
+        src_field="text",
+        target_field="class",
+        use_fixed_rank=False,
     )
-    assert len(pipe) == len(pipe_with_rank) * num_ranks
+    assert len(dataset) == train_len
+    val = next(iter(dataset))
+    assert len(val) == 2
+    it = iter(dataset)
+    for i in range(train_len):
+        item = next(it)
+        assert item is not None
+    del dataset
 
 
-def test_batch_read(delta_path):
-    num_ranks = 16
-    batch_size = 512
-
-    pipe = DeltaDataPipe(
+def test_sharded_read(delta_table_info):
+    delta_path, train_len = delta_table_info
+    dataset = DeltaIterableDataset(
         delta_path,
-        fields=["class", "text"],
+        length=train_len,
         id_field="id",
+        src_field="text",
+        target_field="class",
         use_fixed_rank=True,
-        fixed_rank=3,
-        num_ranks=num_ranks,
-        batch_size=batch_size,
+        rank=2,
+        num_ranks=4,
     )
-    assert len(next(iter(pipe))) == batch_size
+    ds_len = len(dataset)
+    expected_shard_len = int(train_len / 4)
+    assert ds_len == expected_shard_len
+
+    it = iter(dataset)
+    for i in range(expected_shard_len):
+        item = next(it)
+        assert item is not None
+    del dataset
+
+def test_pt_dataloader(delta_table_info):
+    delta_path, train_len = delta_table_info
+
+    dl = create_pytorch_dataloader(delta_path, length=train_len,
+        id_field="id",
+        src_field="text",
+        target_field="class",
+        use_fixed_rank=True,
+        rank=2,
+        num_ranks=4, )
+
+    expected_shard_len = int(train_len / 4)
+
+    it = iter(dl)
+    for i in range(expected_shard_len):
+        item = next(it)
+        assert item is not None
+    del dl

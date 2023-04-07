@@ -1,4 +1,5 @@
 import io
+import logging
 import math
 import queue
 import threading
@@ -11,12 +12,12 @@ from time import sleep
 import numpy as np
 from PIL import Image
 from deltalake import DeltaTable
-from torch.utils.data import get_worker_info, Dataset, IterableDataset, DataLoader
+from torch.utils.data import get_worker_info, IterableDataset
 import pyarrow.dataset as ds
 import pyarrow.compute as pc
-from typing import List, Optional, Callable
+from typing import Optional, Callable
 
-from torchvision.datasets import VisionDataset
+logger = logging.getLogger(__name__)
 
 
 class DeltaIterableDataset(IterableDataset):
@@ -28,7 +29,7 @@ class DeltaIterableDataset(IterableDataset):
         id_field: str,
         src_field: str,
         target_field: str,
-        batch_size: int = None,
+        # batch_size: int = None,
         apply_src_numpy_shape=None,
         load_pil: bool = False,
         transform: Optional[Callable] = None,
@@ -38,8 +39,9 @@ class DeltaIterableDataset(IterableDataset):
         num_ranks: int = None,
         num_workers: int = 2,
         shuffle: bool = False,
+        timeout: int = 15,
+        queue_size: int = 25000,
     ) -> None:
-
         super().__init__()
         self.path = path
         self.fields = {
@@ -53,50 +55,53 @@ class DeltaIterableDataset(IterableDataset):
         self.rank = rank
         self.num_ranks = num_ranks
         self.num_workers = num_workers
-        self.batch_size = batch_size
+        # self.batch_size = batch_size
         self.apply_src_numpy_shape = apply_src_numpy_shape
         self.load_pil = load_pil
         self.transform = transform
         self.target_transform = target_transform
         self.shuffle = shuffle
+        self.timeout = timeout
+        self.length = length
+        self.path = path
+        self.queue_size = queue_size
 
+        self.loaded = False
+
+    def init_loading(self, length, path, queue_size):
         self.delta_table = None
         self.scanner = None
         self.start = 0
-        if length is not None and length > 0 : 
-          self.end = length
+        if length is not None and length > 0:
+            self.end = length
         else:
-          self.end = self.count()
-        print(f"Dataset for path {path}. Count:{self.end}")
-
+            self.end = self.count()
+        logger.debug(f"Dataset for path {path}. Count:{self.end}")
         _info = get_worker_info()
-
         if self.use_fixed_rank:
             new_start = self.rank * self.end / self.num_ranks
             new_end = (self.rank + 1) * self.end / self.num_ranks
             self.start = new_start
             self.end = new_end
-            print(
+            logger.debug(
                 f"Using fixed rank.  Current rank: {self.rank} World size: {self.num_ranks}"
             )
-            print(f"Start: {self.start} End: {self.end}")
+            logger.debug(f"Start: {self.start} End: {self.end}")
         elif _info is not None:
             self.rank = _info.id
             self.num_ranks = _info.num_workers
-            print(
+            logger.debug(
                 f"Detected DDP process. Current rank: {self.rank} World size: {self.num_ranks}"
             )
             new_start = self.rank * self.end / self.num_ranks
             new_end = (self.rank + 1) * self.end / self.num_ranks
-            print(
+            logger.debug(
                 "This rank will use the follosing set of rows: {self.start}-{self.end}"
             )
             self.start = new_start
             self.end = new_end
-
-        self.queue = Queue(maxsize=10000)
+        self.queue = Queue(maxsize=queue_size)
         self.stop_event = threading.Event()
-
         self.delta_table = None
         self.scanner = None
         self.workers = [
@@ -117,6 +122,7 @@ class DeltaIterableDataset(IterableDataset):
                     self.target_field,
                     self.transform,
                     self.target_transform,
+                    self.timeout,
                 ),
                 daemon=True,
             )
@@ -124,7 +130,7 @@ class DeltaIterableDataset(IterableDataset):
         ]
         for w in self.workers:
             w.start()
-        sleep(120)
+        self.loaded = True
 
     @staticmethod
     def worker_fn(
@@ -142,9 +148,10 @@ class DeltaIterableDataset(IterableDataset):
         target_field,
         transform,
         target_transform,
+        timeout,
     ):
         try:
-            print(f"Started worker for path {path} and range: {start}-{end}")
+            logger.debug(f"Started worker for path {path} and range: {start}-{end}")
             i = 0
             _filter = None
             if end > 0 and start >= 0:
@@ -158,14 +165,14 @@ class DeltaIterableDataset(IterableDataset):
             while not event.is_set():
                 for rb in scanner.to_reader():
                     num_rows = rb.num_rows
-                    #pylist = rb.to_pylist()
+                    # pylist = rb.to_pylist()
                     indexes = list(range(num_rows))
                     if shuffle:
                         random.shuffle(indexes)
 
                     for i in indexes:
                         item = rb.slice(offset=i, length=1).to_pylist()[0]
-                        #pylist[i]
+                        # pylist[i]
                         if apply_src_numpy_shape is not None:
                             item[src_field] = np.frombuffer(
                                 item[src_field], dtype=np.uint8
@@ -180,35 +187,34 @@ class DeltaIterableDataset(IterableDataset):
                             q.put(
                                 (item[src_field], item[target_field]),
                                 block=True,
-                                timeout=360,
+                                timeout=timeout,
                             )
                             i += 1
                             if event.is_set():
                                 return
                         except queue.Full:
-                            print("full")
-                            sleep(60)
+                            logger.debug("full")
+                            sleep(1)
                         except Exception as e:
                             print(e)
-            # print("Finished reading: ", i, " ", start, " ", end)
-            # sleep(1000)
+
         except Exception as e:
             print(e)
-    
+
     def _get_active_spark_session(self):
-      try:
-          from pyspark.sql import SparkSession
-      except ImportError:
-          return None
-      try:
-          return SparkSession.getActiveSession()
-      except Exception:
-          return None
-    
+        try:
+            from pyspark.sql import SparkSession
+        except ImportError:
+            return None
+        try:
+            return SparkSession.getActiveSession()
+        except Exception:
+            return None
+
     def count(self):
         spark = self._get_active_spark_session()
         if spark is not None:
-            print("Using spark to determine length..")
+            logger.debug("Using spark to determine length..")
             _dbfs_path = self.path.replace("/dbfs/", "dbfs:/")
             return spark.read.format("delta").load(_dbfs_path).count()
         else:
@@ -216,7 +222,7 @@ class DeltaIterableDataset(IterableDataset):
             for rb in self.init_scanner().to_reader():
                 _cnt += rb.num_rows
             return _cnt
-          
+
     def init_scanner_and_apply_rank(self):
         _info = get_worker_info()
         if self.use_fixed_rank:
@@ -249,10 +255,12 @@ class DeltaIterableDataset(IterableDataset):
         return self.scanner
 
     def __iter__(self):
+        if not self.loaded:
+            self.init_loading(self.length, self.path, self.queue_size)
         i = self.start
         while True:
             try:
-                item = self.queue.get(block=True, timeout=60)
+                item = self.queue.get(block=True, timeout=self.timeout)
                 yield item
                 i += 1
                 if i >= self.end:
@@ -263,13 +271,25 @@ class DeltaIterableDataset(IterableDataset):
                 for w in self.workers:
                     if w.is_alive():
                         alive = True
-                        print("\nEmpty ", i)
+                        logger.debug("\nEmpty ", i)
                 if not alive:
-                    print("\Exiting ", i)
+                    logger.debug("Exiting ", i)
                     return
 
     def __len__(self):
-        return self.end - self.start
+        if not self.loaded:
+            self.init_loading(self.length, self.path, self.queue_size)
+        return int(self.end - self.start)
+
+    def stop(self):
+        self.stop_event.set()
+        self.loaded = False
+        self.delta_table = None
+        self.scanner = None
+        self.queue = None
+        for w in self.workers:
+            w.join(self.timeout)
+        self.workers = None
 
     def __del__(self):
-        self.stop_event.set()
+        self.stop()

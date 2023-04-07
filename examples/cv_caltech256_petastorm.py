@@ -140,7 +140,6 @@ class LitModel(pl.LightningModule):
         )
 
     def forward(self, x):
-
         x = self.model(x)
         x = x.view(x.size(0), -1)
         x = F.log_softmax(self.fc1(x), dim=1)
@@ -189,7 +188,6 @@ class LitModel(pl.LightningModule):
 
 
 if __name__ == "__main__":
-
     torch.set_float32_matmul_precision("medium")
 
     dm = DeltaDataModule(

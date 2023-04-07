@@ -43,7 +43,9 @@ class DeltaDataModule(pl.LightningDataModule):
 
         self.num_classes = 257
 
-    def dataloader(self, path: str, length:int, shuffle=False, batch_size=32, num_workers=0):
+    def dataloader(
+        self, path: str, length: int, shuffle=False, batch_size=32, num_workers=0
+    ):
         from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
 
         dataset = DeltaIterableDataset(
@@ -149,7 +151,6 @@ class LitModel(pl.LightningModule):
 
 
 if __name__ == "__main__":
-
     torch.set_float32_matmul_precision("medium")
 
     dm = DeltaDataModule()

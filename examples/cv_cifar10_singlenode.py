@@ -199,7 +199,6 @@ class LitModel(pl.LightningModule):
 
 
 if __name__ == "__main__":
-
     dm = CIFAR10DataModule()
     # x = next(iter(dm.train_dataloader()))
     # print(x)
