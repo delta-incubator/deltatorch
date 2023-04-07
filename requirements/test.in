@@ -1,0 +1,8 @@
+-r base.in
+pyspark
+pyarrow
+pandas
+numpy
+pytest
+black
+portalocker
