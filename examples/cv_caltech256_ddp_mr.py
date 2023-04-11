@@ -1,5 +1,6 @@
 # Databricks notebook source
-# MAGIC %pip install -r ../requirements.txt
+!pip install pytorch_lightning git+https://github.com/mshtelma/torchdelta
+
 
 # COMMAND ----------
 
@@ -18,8 +19,8 @@ from torchdelta.deltadataset import DeltaIterableDataset
 
 # COMMAND ----------
 
-train_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x200_train.delta"
-test_path = "/dbfs/tmp/msh/datasets/caltech256_test.delta"
+train_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x10_train.delta"
+test_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x10_test.delta"
 
 # COMMAND ----------
 
@@ -47,10 +48,11 @@ class DeltaDataModule(pl.LightningDataModule):
     def dataloader(
         self, path: str, length: int, shuffle=False, batch_size=32, num_workers=0
     ):
-        from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
+        #from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
 
-        dataset = DeltaIterableDataset(
-            path,
+        from torchdelta import create_pytorch_dataloader
+
+        return create_pytorch_dataloader(path,
             length,
             src_field="image",
             target_field="label",
@@ -61,30 +63,23 @@ class DeltaDataModule(pl.LightningDataModule):
             shuffle=True,
             use_fixed_rank=True,
             rank=self.rank,
-            num_ranks=self.num_ranks,
-        )
-
-        return DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=0,
-        )
+            num_ranks=self.num_ranks, 
+            batch_size=batch_size)
 
     def train_dataloader(self):
         return self.dataloader(
             train_path,
-            length=5507180,
+            length=306070,
             shuffle=True,
             batch_size=384,
             num_workers=2,
         )
 
     def val_dataloader(self):
-        return self.dataloader(test_path, length=3054)
+        return self.dataloader(test_path, length=15073)
 
     def test_dataloader(self):
-        return self.dataloader(test_path, length=3054)
+        return self.dataloader(test_path, length=15073)
 
 
 class LitModel(pl.LightningModule):
@@ -98,7 +93,7 @@ class LitModel(pl.LightningModule):
 
         self.accuracy = Accuracy(task="multiclass", num_classes=num_classes)
 
-        self.model = models.viresmobilenet_v3_large()
+        self.model = models.mobilenet_v3_large()
 
     def forward(self, x):
         x = self.model(x)
@@ -150,10 +145,6 @@ class LitModel(pl.LightningModule):
 
 # COMMAND ----------
 
-import spark_pytorch_distributor.mirror_runner as mrr
-
-# COMMAND ----------
-
 
 def train_distributed():
     torch.set_float32_matmul_precision("medium")
@@ -165,18 +156,20 @@ def train_distributed():
     trainer = pl.Trainer(
         accelerator="gpu",
         devices=1,
-        num_nodes=8,
+        #num_nodes=4,
         strategy="ddp",
         default_root_dir="/dbfs/tmp/trainer_logs",
-        max_epochs=5,
-        replace_sampler_ddp=False
+        max_epochs=1,
+        # replace_sampler_ddp=False
         # auto_scale_batch_size=True,
         # reload_dataloaders_every_n_epochs=1
         # gpus=1,
         # callbacks=[early_stop_callback, checkpoint_callback],
     )
 
-    print(f"Rank: {trainer.global_rank}")
+    print(f"Global Rank: {trainer.global_rank}")
+    print(f"Local Rank: {trainer.local_rank}")
+
     print(f"World Size: {trainer.world_size}")
 
     dm = DeltaDataModule(rank=trainer.global_rank, num_ranks=trainer.world_size)
@@ -185,12 +178,18 @@ def train_distributed():
 
     trainer.fit(model, dm)
 
+    print("Done!")
+
     # trainer.test(dataloaders=dm.test_dataloader())
     # return trainer
 
 
 # COMMAND ----------
 
-trainer = mrr.MirrorRunner(num_slots=8, use_custom_strategy=True, local_mode=False).run(
-    train_distributed
-)
+from pyspark.ml.torch.distributor import TorchDistributor
+distributed = TorchDistributor(num_processes=2, local_mode=False, use_gpu=True)
+distributed.run(train_distributed)
+
+# COMMAND ----------
+
+

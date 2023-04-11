@@ -1,8 +1,4 @@
 # Databricks notebook source
-# MAGIC %pip install -r ../requirements.txt
-
-# COMMAND ----------
-
 import os
 
 from pyspark.sql import SparkSession, Window
@@ -13,8 +9,8 @@ from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
 
 # COMMAND ----------
 
-spark_write_path = "/tmp/msh/datasets/caltech256_duplicated"
-train_read_path = "/tmp/msh/datasets/caltech256_duplicated"
+spark_write_path = "/tmp/msh/datasets/caltech256_duplicated_x10"
+train_read_path = "/tmp/msh/datasets/caltech256_duplicated_x10"
 temp_path = "/tmp/"
 
 # COMMAND ----------
@@ -77,15 +73,18 @@ def prepare_caltech_data(iter_count: int = 1):
 
 
 def split_spark_df(df):
+    print(f"Full count = {df.count()}")
     fractions = (
         df.select("label")
         .distinct()
-        .withColumn("fraction", lit(0.9))
+        .withColumn("fraction", lit(0.05))
         .rdd.collectAsMap()
     )
-    print(fractions)
-    train_df = df.stat.sampleBy("label", fractions, 45)
-    test_df = df.subtract(train_df)
+    test_df = df.stat.sampleBy("label", fractions)
+    test_df.groupBy("label").count().orderBy("label").show()
+    print(f"Test count = {test_df.count()}")
+    train_df = df
+    print(f"Train count = {train_df.count()}")
     return train_df, test_df
 
 
@@ -97,12 +96,12 @@ def store_as_delta(df, name):
     ).mode("overwrite").save(name)
 
 
-df = prepare_caltech_data(iter_count=10)
-train_df, test_df = split_spark_df(df)
-print(train_df.groupby("label").count().count())
-print(train_df.count())
-print(test_df.groupby("label").count().count())
-print(test_df.count())
+full_df = prepare_caltech_data(iter_count=10)
+train_df, test_df = split_spark_df(full_df)
+#print(train_df.groupby("label").count().count())
+print(f"Train count = {train_df.count()}")
+#print(test_df.groupby("label").count().count())
+print(f"Test count = {test_df.count()}")
 store_as_delta(train_df, f"{spark_write_path}_train.delta")
 store_as_delta(test_df, f"{spark_write_path}_test.delta")
 
@@ -112,14 +111,16 @@ f"{spark_write_path}_train.delta"
 
 # COMMAND ----------
 
-# MAGIC %sql optimize delta.`/tmp/msh/datasets/caltech256_duplicated_train.delta` zorder by id
+# MAGIC %sql optimize delta.`/tmp/msh/datasets/caltech256_duplicated_x10_train.delta` zorder by id
 
 # COMMAND ----------
 
-# MAGIC %sql select count(1) from delta.`/tmp/msh/datasets/caltech256_duplicated_train.delta`
+# MAGIC %sql select count(1) from delta.`/tmp/msh/datasets/caltech256_duplicated_x10_train.delta`
 
 # COMMAND ----------
 
-# MAGIC %sql select count(1) from delta.`/tmp/msh/datasets/caltech256_duplicated_test.delta`
+# MAGIC %sql select count(1) from delta.`/tmp/msh/datasets/caltech256_duplicated_x10_test.delta`
 
 # COMMAND ----------
+
+
