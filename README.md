@@ -1,5 +1,7 @@
 # TorchDelta
 
+![![image](https://github.com/mshtelma/torchdelta/workflows/build/badge.svg)](https://github.com/mshtelma/torchdelta/actions/workflows/ci.yml/badge.svg)
+
 ## Concept
 
 `torchdelta` allows users to directly use  `DeltaLake` tables as a data source for training using PyTorch. 
