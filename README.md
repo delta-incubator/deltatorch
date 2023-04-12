@@ -6,20 +6,24 @@
 Using  `torchdelta`, users can create a PyTorch  `DataLoader` to load the training data. 
 We support distributed training using PyTorch DDP as well. 
 
-## Requirements
+
+
+## Usage
+
+### Requirements
 
 - Python Version \> 3.8
 - `pip` or `conda`
 
-## Installation
+### Installation
 
 - with `pip`:
 
 ```
 pip install git+https://github.com/mshtelma/torchdelta
 ```
+### Create PyTorch DataLoader to read our DeltaLake table
 
-## Getting started
 To utilize `torchdelta` at first, we will need a DeltaLake table containing training data we would like to use for training your PyTorch deep learning model. 
 There is a requirement: this table must have an autoincrement ID field. This field is used by `torchdelta` for sharding and parallelization of loading. 
 After that, we can use the `create_pytorch_dataloader` function to create PyTorch DataLoader, which can be used directly during training. 
