@@ -98,9 +98,9 @@ def store_as_delta(df, name):
 
 full_df = prepare_caltech_data(iter_count=10)
 train_df, test_df = split_spark_df(full_df)
-#print(train_df.groupby("label").count().count())
+# print(train_df.groupby("label").count().count())
 print(f"Train count = {train_df.count()}")
-#print(test_df.groupby("label").count().count())
+# print(test_df.groupby("label").count().count())
 print(f"Test count = {test_df.count()}")
 store_as_delta(train_df, f"{spark_write_path}_train.delta")
 store_as_delta(test_df, f"{spark_write_path}_test.delta")
@@ -122,5 +122,3 @@ f"{spark_write_path}_train.delta"
 # MAGIC %sql select count(1) from delta.`/tmp/msh/datasets/caltech256_duplicated_x10_test.delta`
 
 # COMMAND ----------
-
-

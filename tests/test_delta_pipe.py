@@ -67,16 +67,20 @@ def test_sharded_read(delta_table_info):
         assert item is not None
     del dataset
 
+
 def test_pt_dataloader(delta_table_info):
     delta_path, train_len = delta_table_info
 
-    dl = create_pytorch_dataloader(delta_path, length=train_len,
+    dl = create_pytorch_dataloader(
+        delta_path,
+        length=train_len,
         id_field="id",
         src_field="text",
         target_field="class",
         use_fixed_rank=True,
         rank=2,
-        num_ranks=4, )
+        num_ranks=4,
+    )
 
     expected_shard_len = int(train_len / 4)
 

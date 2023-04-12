@@ -1,5 +1,5 @@
 # Databricks notebook source
-!pip install pytorch_lightning git+https://github.com/mshtelma/torchdelta
+# MAGIC %pip install pytorch_lightning git+https://github.com/mshtelma/torchdelta
 
 
 # COMMAND ----------
@@ -9,13 +9,11 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
 
 from torchmetrics import Accuracy
 
 from torchvision import transforms, models
 
-from torchdelta.deltadataset import DeltaIterableDataset
 
 # COMMAND ----------
 
@@ -48,11 +46,10 @@ class DeltaDataModule(pl.LightningDataModule):
     def dataloader(
         self, path: str, length: int, shuffle=False, batch_size=32, num_workers=0
     ):
-        #from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
-
         from torchdelta import create_pytorch_dataloader
 
-        return create_pytorch_dataloader(path,
+        return create_pytorch_dataloader(
+            path,
             length,
             src_field="image",
             target_field="label",
@@ -63,8 +60,9 @@ class DeltaDataModule(pl.LightningDataModule):
             shuffle=True,
             use_fixed_rank=True,
             rank=self.rank,
-            num_ranks=self.num_ranks, 
-            batch_size=batch_size)
+            num_ranks=self.num_ranks,
+            batch_size=batch_size,
+        )
 
     def train_dataloader(self):
         return self.dataloader(
@@ -156,7 +154,7 @@ def train_distributed():
     trainer = pl.Trainer(
         accelerator="gpu",
         devices=1,
-        #num_nodes=4,
+        # num_nodes=4,
         strategy="ddp",
         default_root_dir="/dbfs/tmp/trainer_logs",
         max_epochs=1,
@@ -187,9 +185,8 @@ def train_distributed():
 # COMMAND ----------
 
 from pyspark.ml.torch.distributor import TorchDistributor
+
 distributed = TorchDistributor(num_processes=2, local_mode=False, use_gpu=True)
 distributed.run(train_distributed)
 
 # COMMAND ----------
-
-
