@@ -3,7 +3,7 @@
 ## Concept
 
 `torchdelta` allows users to directly use  `DeltaLake` tables as a data source for training using PyTorch. 
-Using  `torchdelta` users can create a PyTorch  `DataLoader` and use it to load the training data. 
+Using  `torchdelta`, users can create a PyTorch  `DataLoader` to load the training data. 
 We support distributed training using PyTorch DDP as well. 
 
 ## Requirements
@@ -20,10 +20,12 @@ pip install git+https://github.com/mshtelma/torchdelta
 ```
 
 ## Getting started
-To utilise `torchdelta` at first we will need a DeltaLake table containing  training data we would like to use for training your PyTorch deep learning model. 
+To utilize `torchdelta` at first, we will need a DeltaLake table containing training data we would like to use for training your PyTorch deep learning model. 
 There is a requirement: this table must have an autoincrement ID field. This field is used by `torchdelta` for sharding and parallelization of loading. 
-After that we can use `create_pytorch_dataloader` function to create PyTorch DataLoader which can be directly used during the training process. 
+After that, we can use the `create_pytorch_dataloader` function to create PyTorch DataLoader, which can be used directly during training. 
 Below you can find an example of creating a DataLoader for the following table schema :
+
+
 ```sql
 CREATE TABLE TRAINING_DATA 
 (   
