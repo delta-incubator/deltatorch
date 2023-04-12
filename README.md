@@ -41,15 +41,23 @@ from torchdelta import create_pytorch_dataloader
 def create_data_loader(path:str, length:int, batch_size:int):
 
     return create_pytorch_dataloader(
+        # Path to the DeltaLake table
         path,
+        # Length of the table. Can be easily pre-calculated using spark.read.load(path).count()
         length,
+        # Field used as a source (X)
         src_field="image",
+        # Target field (Y)
         target_field="label",
+        # Autoincrement ID field
         id_field="id",
+        # Load image using Pillow
         load_pil=True,
+        # Number of readers 
         num_workers=2,
+        # Shuffle data inside the record batches
         shuffle=True,
-        use_fixed_rank=True,
+        # Batch size        
         batch_size=batch_size,
     )
 ```
