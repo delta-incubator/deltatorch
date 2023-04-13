@@ -6,8 +6,8 @@ from torchtext.datasets import AG_NEWS
 
 import pytest
 
-from torchdelta import DeltaIterableDataset
-from torchdelta.pytorch import create_pytorch_dataloader
+from deltatorch import DeltaIterableDataset
+from deltatorch import create_pytorch_dataloader
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def test_simple_read(delta_table_info):
     val = next(iter(dataset))
     assert len(val) == 2
     it = iter(dataset)
-    for i in range(train_len):
+    for _ in range(train_len):
         item = next(it)
         assert item is not None
     del dataset
@@ -62,7 +62,7 @@ def test_sharded_read(delta_table_info):
     assert ds_len == expected_shard_len
 
     it = iter(dataset)
-    for i in range(expected_shard_len):
+    for _ in range(expected_shard_len):
         item = next(it)
         assert item is not None
     del dataset
@@ -85,7 +85,7 @@ def test_pt_dataloader(delta_table_info):
     expected_shard_len = int(train_len / 4)
 
     it = iter(dl)
-    for i in range(expected_shard_len):
+    for _ in range(expected_shard_len):
         item = next(it)
         assert item is not None
     del dl

@@ -1,11 +1,11 @@
-# TorchDelta
+# deltatorch
 
-![![image](https://github.com/mshtelma/torchdelta/workflows/build/badge.svg)](https://github.com/mshtelma/torchdelta/actions/workflows/ci.yml/badge.svg)
+![![image](https://github.com/mshtelma/deltatorch/workflows/build/badge.svg)](https://github.com/mshtelma/deltatorch/actions/workflows/ci.yml/badge.svg)
 
 ## Concept
 
-`torchdelta` allows users to directly use  `DeltaLake` tables as a data source for training using PyTorch. 
-Using  `torchdelta`, users can create a PyTorch  `DataLoader` to load the training data. 
+`deltatorch` allows users to directly use  `DeltaLake` tables as a data source for training using PyTorch. 
+Using  `deltatorch`, users can create a PyTorch  `DataLoader` to load the training data. 
 We support distributed training using PyTorch DDP as well. 
 
 
@@ -22,12 +22,12 @@ We support distributed training using PyTorch DDP as well.
 - with `pip`:
 
 ```
-pip install git+https://github.com/mshtelma/torchdelta
+pip install git+https://github.com/mshtelma/deltatorch
 ```
 ### Create PyTorch DataLoader to read our DeltaLake table
 
-To utilize `torchdelta` at first, we will need a DeltaLake table containing training data we would like to use for training your PyTorch deep learning model. 
-There is a requirement: this table must have an autoincrement ID field. This field is used by `torchdelta` for sharding and parallelization of loading. 
+To utilize `deltatorch` at first, we will need a DeltaLake table containing training data we would like to use for training your PyTorch deep learning model. 
+There is a requirement: this table must have an autoincrement ID field. This field is used by `deltatorch` for sharding and parallelization of loading. 
 After that, we can use the `create_pytorch_dataloader` function to create PyTorch DataLoader, which can be used directly during training. 
 Below you can find an example of creating a DataLoader for the following table schema :
 
@@ -44,7 +44,7 @@ USING delta LOCATION 'path'
 
 After the table is ready we can use the `create_pytorch_dataloader` function to create a PyTorch DataLoader :
 ```python
-from torchdelta import create_pytorch_dataloader
+from deltatorch import create_pytorch_dataloader
 
 def create_data_loader(path:str, length:int, batch_size:int):
 

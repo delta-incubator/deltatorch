@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %pip install pytorch_lightning git+https://github.com/mshtelma/torchdelta
+# MAGIC %pip install pytorch_lightning git+https://github.com/mshtelma/deltatorch
 
 
 # COMMAND ----------
@@ -14,6 +14,7 @@ from torchmetrics import Accuracy
 
 from torchvision import transforms, models
 
+from deltatorch import create_pytorch_dataloader
 
 # COMMAND ----------
 
@@ -46,8 +47,6 @@ class DeltaDataModule(pl.LightningDataModule):
     def dataloader(
         self, path: str, length: int, shuffle=False, batch_size=32, num_workers=0
     ):
-        from torchdelta import create_pytorch_dataloader
-
         return create_pytorch_dataloader(
             path,
             length,

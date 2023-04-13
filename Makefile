@@ -1,15 +1,18 @@
-env:
-	  sh ./scripts/create_venv.sh
+update:
+	  poetry update && poetry install
 
 test:
-	source .venv/bin/activate && pip install -e . && pytest tests
+	poetry run pytest tests
 
 
 clean:
 	rm -rf *.egg-info && rm -rf .pytest_cache
 
 format:
-	black .
+	poetry run black .
 
 lint:
-	prospector   --profile prospector.yaml && black --check lendingclub_scoring
+	 poetry run flake8 \
+ 		--max-line-length=150 \
+ 		--require-plugins="flake8-bugbear pep8-naming flake8-pyproject"
+

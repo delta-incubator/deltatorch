@@ -14,7 +14,7 @@ from torchmetrics import Accuracy
 
 from torchvision import transforms, models
 
-from torchdelta.deltadataset import DeltaIterableDataset
+from deltatorch.deltadataset import DeltaIterableDataset
 
 # COMMAND ----------
 

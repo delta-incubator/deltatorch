@@ -8,11 +8,15 @@
 Text classification with the torchtext library
 ==================================
 
-In this tutorial, we will show how to use the torchtext library to build the dataset for the text classification analysis. Users will have the flexibility to
+In this tutorial, we will show how to use the torchtext library to build the dataset for the text classification analysis.
+ Users will have the flexibility to
 
    - Access to the raw data as an iterator
-   - Build data processing pipeline to convert the raw text strings into ``torch.Tensor`` that can be used to train the model
-   - Shuffle and iterate the data with `torch.utils.data.DataLoader <https://pytorch.org/docs/stable/data.html?highlight=dataloader#torch.utils.data.DataLoader>`__
+   - Build data processing pipeline to convert the raw text strings into ``torch.Tensor`` that can be used to train
+   the model
+   - Shuffle and iterate the data with
+   `torch.utils.data.DataLoader
+   <https://pytorch.org/docs/stable/data.html?highlight=dataloader#torch.utils.data.DataLoader>`__
 """
 
 
@@ -20,9 +24,11 @@ In this tutorial, we will show how to use the torchtext library to build the dat
 # Access to the raw dataset iterators
 # -----------------------------------
 #
-# The torchtext library provides a few raw dataset iterators, which yield the raw text strings. For example, the ``AG_NEWS`` dataset iterators yield the raw data as a tuple of label and text.
+# The torchtext library provides a few raw dataset iterators, which yield the raw text strings.
+# For example, the ``AG_NEWS`` dataset iterators yield the raw data as a tuple of label and text.
 #
-# To access torchtext datasets, please install torchdata following instructions at https://github.com/pytorch/data.
+# To access torchtext datasets, please install torchdata following instructions
+# at https://github.com/pytorch/data.
 #
 
 # COMMAND ----------
@@ -55,7 +61,7 @@ from torchtext.datasets import AG_NEWS
 
 # COMMAND ----------
 
-from torchdelta import DeltaDataPipe
+from deltatorch import DeltaDataPipe
 
 ######################################################################
 # Let's prepare data
@@ -103,10 +109,13 @@ spark.createDataFrame(df).write.format("delta").mode("overwrite").save(
 # Prepare data processing pipelines
 # ---------------------------------
 #
-# We have revisited the very basic components of the torchtext library, including vocab, word vectors, tokenizer. Those are the basic data processing building blocks for raw text string.
+# We have revisited the very basic components of the torchtext library, including vocab, word vectors, tokenizer.
+# Those are the basic data processing building blocks for raw text string.
 #
-# Here is an example for typical NLP data processing with tokenizer and vocabulary. The first step is to build a vocabulary with the raw training dataset. Here we use built in
-# factory function `build_vocab_from_iterator` which accepts iterator that yield list or iterator of tokens. Users can also pass any special symbols to be added to the
+# Here is an example for typical NLP data processing with tokenizer and vocabulary.
+# The first step is to build a vocabulary with the raw training dataset. Here we use built in
+# factory function `build_vocab_from_iterator` which accepts iterator that yield list or iterator of tokens.
+# Users can also pass any special symbols to be added to the
 # vocabulary.
 
 
@@ -140,14 +149,16 @@ vocab.set_default_index(vocab["<unk>"])
 #     vocab(['here', 'is', 'an', 'example'])
 #     >>> [475, 21, 30, 5297]
 #
-# Prepare the text processing pipeline with the tokenizer and vocabulary. The text and label pipelines will be used to process the raw data strings from the dataset iterators.
+# Prepare the text processing pipeline with the tokenizer and vocabulary.
+# The text and label pipelines will be used to process the raw data strings from the dataset iterators.
 
 text_pipeline = lambda x: vocab(tokenizer(x))
 label_pipeline = lambda x: int(x) - 1
 
 
 ######################################################################
-# The text pipeline converts a text string into a list of integers based on the lookup table defined in the vocabulary. The label pipeline converts the label into integers. For example,
+# The text pipeline converts a text string into a list of integers based on the lookup table defined in the vocabulary.
+# The label pipeline converts the label into integers. For example,
 #
 # ::
 #
@@ -164,11 +175,19 @@ label_pipeline = lambda x: int(x) - 1
 #
 # `torch.utils.data.DataLoader <https://pytorch.org/docs/stable/data.html?highlight=dataloader#torch.utils.data.DataLoader>`__
 # is recommended for PyTorch users (a tutorial is `here <https://pytorch.org/tutorials/beginner/data_loading_tutorial.html>`__).
-# It works with a map-style dataset that implements the ``getitem()`` and ``len()`` protocols, and represents a map from indices/keys to data samples. It also works with an iterable dataset with the shuffle argument of ``False``.
+# It works with a map-style dataset that implements the ``getitem()`` and ``len()`` protocols, and represents a map
+# from indices/keys to data samples. It also works with an iterable dataset with the shuffle argument of ``False``.
 #
-# Before sending to the model, ``collate_fn`` function works on a batch of samples generated from ``DataLoader``. The input to ``collate_fn`` is a batch of data with the batch size in ``DataLoader``, and ``collate_fn`` processes them according to the data processing pipelines declared previously. Pay attention here and make sure that ``collate_fn`` is declared as a top level def. This ensures that the function is available in each worker.
+# Before sending to the model, ``collate_fn`` function works on a batch of samples generated from ``DataLoader``.
+# The input to ``collate_fn`` is a batch of data with the batch size in ``DataLoader``, and ``collate_fn``
+# processes them according to the data processing pipelines declared previously.
+# Pay attention here and make sure that ``collate_fn`` is declared as a top level def.
+# This ensures that the function is available in each worker.
 #
-# In this example, the text entries in the original data batch input are packed into a list and concatenated as a single tensor for the input of ``nn.EmbeddingBag``. The offset is a tensor of delimiters to represent the beginning index of the individual sequence in the text tensor. Label is a tensor saving the labels of individual text entries.
+# In this example, the text entries in the original data batch input are packed into a list and concatenated
+# as a single tensor for the input of ``nn.EmbeddingBag``. The offset is a tensor of delimiters to represent
+# the beginning index of the individual sequence in the text tensor.
+# Label is a tensor saving the labels of individual text entries.
 
 
 from torch.utils.data import DataLoader
@@ -198,7 +217,10 @@ dataloader = DataLoader(
 # Define the model
 # ----------------
 #
-# The model is composed of the `nn.EmbeddingBag <https://pytorch.org/docs/stable/nn.html?highlight=embeddingbag#torch.nn.EmbeddingBag>`__ layer plus a linear layer for the classification purpose. ``nn.EmbeddingBag`` with the default mode of "mean" computes the mean value of a “bag” of embeddings. Although the text entries here have different lengths, nn.EmbeddingBag module requires no padding here since the text lengths are saved in offsets.
+# The model is composed of the `nn.EmbeddingBag <https://pytorch.org/docs/stable/nn.html?highlight=embeddingbag#torch.nn.EmbeddingBag>`__
+# layer plus a linear layer for the classification purpose. ``nn.EmbeddingBag`` with the default mode of "mean"
+# computes the mean value of a “bag” of embeddings.
+# Although the text entries here have different lengths, nn.EmbeddingBag module requires no padding here since the text lengths are saved in offsets.
 #
 # Additionally, since ``nn.EmbeddingBag`` accumulates the average across
 # the embeddings on the fly, ``nn.EmbeddingBag`` can enhance the
@@ -241,7 +263,9 @@ class TextClassificationModel(nn.Module):
 #    3 : Business
 #    4 : Sci/Tec
 #
-# We build a model with the embedding dimension of 64. The vocab size is equal to the length of the vocabulary instance. The number of classes is equal to the number of labels,
+# We build a model with the embedding dimension of 64.
+# The vocab size is equal to the length of the vocabulary instance.
+# The number of classes is equal to the number of labels,
 #
 
 num_class = len(set([label for (label, text) in train_iter]))
@@ -263,7 +287,7 @@ def train(dataloader):
     model.train()
     total_acc, total_count = 0, 0
     log_interval = 500
-    start_time = time.time()
+    # start_time = time.time()
 
     for idx, (label, text, offsets) in enumerate(dataloader):
         optimizer.zero_grad()
@@ -275,7 +299,7 @@ def train(dataloader):
         total_acc += (predicted_label.argmax(1) == label).sum().item()
         total_count += label.size(0)
         if idx % log_interval == 0 and idx > 0:
-            elapsed = time.time() - start_time
+            # elapsed = time.time() - start_time
             print(
                 "| epoch {:3d} | {:5d}/{:5d} batches "
                 "| accuracy {:8.3f}".format(
@@ -283,7 +307,7 @@ def train(dataloader):
                 )
             )
             total_acc, total_count = 0, 0
-            start_time = time.time()
+            # start_time = time.time()
 
 
 def evaluate(dataloader):
@@ -291,9 +315,9 @@ def evaluate(dataloader):
     total_acc, total_count = 0, 0
 
     with torch.no_grad():
-        for idx, (label, text, offsets) in enumerate(dataloader):
+        for _, (label, text, offsets) in enumerate(dataloader):
             predicted_label = model(text, offsets)
-            loss = criterion(predicted_label, label)
+            _ = criterion(predicted_label, label)
             total_acc += (predicted_label.argmax(1) == label).sum().item()
             total_count += label.size(0)
     return total_acc / total_count

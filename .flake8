@@ -1,0 +1,12 @@
+[flake8]
+ignore = E203, E402, N812, E731
+exclude =
+    .git,
+    .eggs,
+    __pycache__,
+    docs/source/conf.py,
+    old,
+    build,
+    dist,
+    old_examples
+max-line-length = 150

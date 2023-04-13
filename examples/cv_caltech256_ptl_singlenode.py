@@ -6,11 +6,11 @@
 import pytorch_lightning as pl
 import torch
 from torch import nn
-from torch.nn import functional as F
+from torch.nn import functional as f
 from torch.utils.data import DataLoader
 from torchmetrics import Accuracy
 from torchvision import transforms, models
-from torchdelta.deltadataset import DeltaIterableDataset
+from deltatorch.deltadataset import DeltaIterableDataset
 
 # COMMAND ----------
 
@@ -43,10 +43,8 @@ class DeltaDataModule(pl.LightningDataModule):
 
         self.num_classes = 257
 
-    def dataloader(
-        self, path: str, length: int, shuffle=False, batch_size=32, num_workers=0
-    ):
-        from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
+    def dataloader(self, path: str, length: int, batch_size=32, num_workers=0):
+        from torchvision.datasets import Caltech256
 
         dataset = DeltaIterableDataset(
             path,
@@ -64,7 +62,7 @@ class DeltaDataModule(pl.LightningDataModule):
         )
 
         return DataLoader(
-            # Caltech256(root='/tmp', download=True, transform=self.transform ),
+            Caltech256(root="/tmp", download=True, transform=self.transform),
             dataset,
             batch_size=batch_size,
             shuffle=False,
@@ -105,14 +103,14 @@ class LitModel(pl.LightningModule):
     def forward(self, x):
         x = self.model(x)
         x = x.view(x.size(0), -1)
-        x = F.log_softmax(self.fc1(x), dim=1)
+        x = f.log_softmax(self.fc1(x), dim=1)
 
         return x
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         logits = self(x)
-        loss = F.nll_loss(logits, y)
+        loss = f.nll_loss(logits, y)
 
         preds = torch.argmax(logits, dim=1)
         acc = self.accuracy(preds, y)
@@ -124,7 +122,7 @@ class LitModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         logits = self(x)
-        loss = F.nll_loss(logits, y)
+        loss = f.nll_loss(logits, y)
 
         # validation metrics
         preds = torch.argmax(logits, dim=1)
@@ -136,7 +134,7 @@ class LitModel(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         logits = self(x)
-        loss = F.nll_loss(logits, y)
+        loss = f.nll_loss(logits, y)
 
         # validation metrics
         preds = torch.argmax(logits, dim=1)

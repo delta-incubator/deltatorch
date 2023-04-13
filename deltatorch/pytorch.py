@@ -1,7 +1,7 @@
 from typing import Optional, Callable
 
 from torch.utils.data import DataLoader
-from torchdelta import DeltaIterableDataset
+from . import DeltaIterableDataset
 
 
 def create_pytorch_dataloader(

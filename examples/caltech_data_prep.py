@@ -2,10 +2,10 @@
 import os
 
 from pyspark.sql import SparkSession, Window
-from pyspark.sql.functions import monotonically_increasing_id, row_number, lit
-from pyspark.sql.types import StructType, StructField, BinaryType, IntegerType, LongType
+from pyspark.sql.functions import row_number, lit
+from pyspark.sql.types import StructType, StructField, BinaryType, LongType
 
-from torchvision.datasets import CIFAR10, CIFAR100, Caltech256
+from torchvision.datasets import Caltech256
 
 # COMMAND ----------
 
@@ -43,7 +43,7 @@ def read_bytes(path: str) -> bytes:
 def prepare_caltech_data(iter_count: int = 1):
     dataset = Caltech256(temp_path, download=True)
     df = None
-    for i in range(iter_count):
+    for _ in range(iter_count):
         _data = [
             (
                 read_bytes(

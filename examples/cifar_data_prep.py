@@ -4,10 +4,10 @@
 # COMMAND ----------
 
 from pyspark.sql import SparkSession, Window
-from pyspark.sql.functions import monotonically_increasing_id, row_number, lit
-from pyspark.sql.types import StructType, StructField, BinaryType, IntegerType, LongType
+from pyspark.sql.functions import row_number, lit
+from pyspark.sql.types import StructType, StructField, BinaryType, LongType
 
-from torchvision.datasets import CIFAR10, CIFAR100
+from torchvision.datasets import CIFAR10
 
 # COMMAND ----------
 
@@ -37,7 +37,7 @@ else:
 def prepare_cifar_data(is_train: bool = True, iter_count: int = 1):
     dataset = CIFAR10(".", train=is_train, download=True)
     df = None
-    for i in range(iter_count):
+    for _ in range(iter_count):
         _df = spark.createDataFrame(
             zip(list(map(lambda x: x.tobytes(), dataset.data)), dataset.targets),
             StructType(
