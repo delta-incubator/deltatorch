@@ -1,7 +1,6 @@
 from typing import Optional, Callable
 
 from torch.utils.data import DataLoader
-from . import DeltaIterableDataset
 from .id_based_deltadataset import IDBasedDeltaDataset
 
 

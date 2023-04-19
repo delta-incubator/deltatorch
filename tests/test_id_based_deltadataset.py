@@ -6,7 +6,6 @@ from torchtext.datasets import AG_NEWS
 
 import pytest
 
-from deltatorch import DeltaIterableDataset
 from deltatorch import create_pytorch_dataloader
 from deltatorch.id_based_deltadataset import IDBasedDeltaDataset
 
