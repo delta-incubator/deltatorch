@@ -28,20 +28,13 @@ def make_batch_slice_iterator(batch_iterator, offset, size, batch_size, batches_
             stream_offset_start = stream_offset_end
             continue
 
-        # TODO: Materializes entire batch as a python list.
-        # Ideally, should be able to 'slice' record batch
-        # Testing suggest that 'batch.slice' returns multiple series/columns independently.
-        # In effect, slice() returns the row (record) set by individual column
-        # Simple attempts to zip() columns were unsuccessful
-        pylist = batch.to_pylist()
-
         while slice_start < stream_offset_end:
             assert (slice_start >= stream_offset_start)
             offset = slice_start - stream_offset_start
             length = min(N - offset, M)
 
             # print(offset, length, stream_offset_start, stream_offset_end)
-            for rec in pylist[offset:offset + length]:
+            for rec in batch.slice(offset, length).to_pylist():
                 yield rec
 
             slice_start += length
