@@ -59,10 +59,11 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         )
         self.id_field = id_field
 
-
     def init_loading(self, length, path):
         self.delta_table = None
         self.scanner = None
+        self.queue = Queue(maxsize=self.queue_size)
+        self.stop_event = threading.Event()
         self.start = 0
         if length is not None and length > 0:
             self.end = length
@@ -201,9 +202,10 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         self.delta_table = None
         self.scanner = None
         self.queue = None
-        for w in self.workers:
-            w.join(self.timeout)
-        self.workers = None
+        if self.workers:
+            for w in self.workers:
+                w.join(self.timeout)
+        self.workers = []
 
     def __del__(self):
         self.stop()

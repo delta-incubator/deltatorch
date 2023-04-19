@@ -45,16 +45,15 @@ def test_simple_read(delta_table_info):
         src_field="text",
         target_field="class",
         use_fixed_rank=False,
-        shuffle=False
+        shuffle=False,
     )
-    #assert len(dataset) == train_len
+    # assert len(dataset) == train_len
     val = next(iter(dataset))
     assert len(val) == 2
-    i=0
+    i = 0
     for item in dataset:
-        i+=1
+        i += 1
     print(i)
-
 
     del dataset
 

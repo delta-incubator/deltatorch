@@ -19,22 +19,22 @@ logger = logging.getLogger(__name__)
 
 class SkipReadDeltaDataset(DeltaIterableDataset):
     def __init__(
-            self,
-            path: str,
-            length: int,
-            src_field: str,
-            target_field: str,
-            apply_src_numpy_shape=None,
-            load_pil: bool = False,
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
-            use_fixed_rank: bool = False,
-            rank: int = None,
-            num_ranks: int = None,
-            num_workers: int = 2,
-            shuffle: bool = False,
-            timeout: int = 15,
-            queue_size: int = 250000,
+        self,
+        path: str,
+        length: int,
+        src_field: str,
+        target_field: str,
+        apply_src_numpy_shape=None,
+        load_pil: bool = False,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        use_fixed_rank: bool = False,
+        rank: int = None,
+        num_ranks: int = None,
+        num_workers: int = 2,
+        shuffle: bool = False,
+        timeout: int = 15,
+        queue_size: int = 250000,
     ):
         super().__init__(
             path,
@@ -62,12 +62,12 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
         _info = get_worker_info()
 
         if self.use_fixed_rank:
-            self.num_chunks = self.num_workers*self.num_ranks
+            self.num_chunks = self.num_workers * self.num_ranks
             assert self.rank > 0
         elif _info is not None:
             self.rank = _info.id
             self.num_ranks = _info.num_workers
-            self.num_chunks = self.num_workers*self.num_ranks
+            self.num_chunks = self.num_workers * self.num_ranks
         else:
             self.num_chunks = self.num_workers
             self.rank = 1
@@ -101,20 +101,20 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
 
     @staticmethod
     def worker_fn(
-            path: str,
-            q: Queue,
-            event: threading.Event,
-            chunk:int,
-            num_chunks:int,
-            shuffle: bool,
-            fields,
-            apply_src_numpy_shape,
-            load_pil,
-            src_field,
-            target_field,
-            transform,
-            target_transform,
-            timeout,
+        path: str,
+        q: Queue,
+        event: threading.Event,
+        chunk: int,
+        num_chunks: int,
+        shuffle: bool,
+        fields,
+        apply_src_numpy_shape,
+        load_pil,
+        src_field,
+        target_field,
+        transform,
+        target_transform,
+        timeout,
     ):
         try:
             delta_table = DeltaTable(path)
@@ -128,10 +128,12 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
                     rb = next(batch_iter, None)
                     if rb is None:
                         return
-                    batch_id+=1
+                    batch_id += 1
                     if batch_id % num_chunks != chunk:
                         continue
-                    logger.debug(f"Worker {chunk} is processing batch {batch_id} with {rb.num_rows} rows.")
+                    logger.debug(
+                        f"Worker {chunk} is processing batch {batch_id} with {rb.num_rows} rows."
+                    )
                     num_rows = rb.num_rows
                     indexes = list(range(num_rows))
                     if shuffle:
