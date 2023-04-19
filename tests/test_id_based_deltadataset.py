@@ -8,6 +8,7 @@ import pytest
 
 from deltatorch import DeltaIterableDataset
 from deltatorch import create_pytorch_dataloader
+from deltatorch.id_based_deltadataset import IDBasedDeltaDataset
 
 
 @pytest.fixture
@@ -27,7 +28,7 @@ def delta_table_info(tmpdir) -> Tuple[str, int]:
 
 def test_simple_read(delta_table_info):
     delta_path, train_len = delta_table_info
-    dataset = DeltaIterableDataset(
+    dataset = IDBasedDeltaDataset(
         delta_path,
         length=train_len,
         id_field="id",
@@ -47,7 +48,7 @@ def test_simple_read(delta_table_info):
 
 def test_sharded_read(delta_table_info):
     delta_path, train_len = delta_table_info
-    dataset = DeltaIterableDataset(
+    dataset = IDBasedDeltaDataset(
         delta_path,
         length=train_len,
         id_field="id",

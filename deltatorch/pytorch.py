@@ -2,6 +2,7 @@ from typing import Optional, Callable
 
 from torch.utils.data import DataLoader
 from . import DeltaIterableDataset
+from .id_based_deltadataset import IDBasedDeltaDataset
 
 
 def create_pytorch_dataloader(
@@ -23,7 +24,7 @@ def create_pytorch_dataloader(
     timeout: int = 15,
     queue_size: int = 25000,
 ):
-    dataset = DeltaIterableDataset(
+    dataset = IDBasedDeltaDataset(
         path,
         length,
         id_field,
