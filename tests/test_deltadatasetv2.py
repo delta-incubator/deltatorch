@@ -18,10 +18,21 @@ from pyarrow.dataset import FileSystemDataset
 def simple_delta_table_info(tmpdir) -> str:
     DATA_ROWS = 100
     MAX_ROW_PER_FILE = 20
-    df = pd.DataFrame({"id": list(range(DATA_ROWS)), "rvalue": [np.random.rand() for i in range(DATA_ROWS)]})
+    df = pd.DataFrame(
+        {
+            "id": list(range(DATA_ROWS)),
+            "rvalue": [np.random.rand() for i in range(DATA_ROWS)],
+        }
+    )
     _path = f"{tmpdir}/random_values.delta"
     # 5 part delta table
-    write_deltalake(_path, df, max_rows_per_file=MAX_ROW_PER_FILE, max_rows_per_group=MAX_ROW_PER_FILE, min_rows_per_group=0)
+    write_deltalake(
+        _path,
+        df,
+        max_rows_per_file=MAX_ROW_PER_FILE,
+        max_rows_per_group=MAX_ROW_PER_FILE,
+        min_rows_per_group=0,
+    )
     return _path
 
 
@@ -37,7 +48,7 @@ def test_read_dataset2(simple_delta_table_info):
         batch_size=BATCH_SIZE,
         batches_per_epoch=BATCHES_PER_EPOCH,
         pad_batches=False,
-        deterministic_file_order=True
+        deterministic_file_order=True,
     )
 
     last_record_id = None
@@ -62,7 +73,7 @@ def test_read_dataset2_workers_base(simple_delta_table_info):
         batch_size=BATCH_SIZE,
         batches_per_epoch=BATCHES_PER_EPOCH,
         pad_batches=False,
-        deterministic_file_order=True
+        deterministic_file_order=True,
     )
 
     # dt = DeltaTable(delta_path)
@@ -107,7 +118,7 @@ def test_read_dataset2_workers_multi(simple_delta_table_info):
         batch_size=BATCH_SIZE,
         batches_per_epoch=BATCHES_PER_EPOCH,
         pad_batches=False,
-        deterministic_file_order=True
+        deterministic_file_order=True,
     )
 
     # dt = DeltaTable(delta_path)

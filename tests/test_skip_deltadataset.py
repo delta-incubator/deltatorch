@@ -8,7 +8,6 @@ from torchtext.datasets import AG_NEWS
 
 import pytest
 
-from deltatorch import DeltaIterableDataset
 from deltatorch import create_pytorch_dataloader
 from deltatorch.id_based_deltadataset import IDBasedDeltaDataset
 from deltatorch.skip_batch_deltadataset import SkipReadDeltaDataset
@@ -45,16 +44,15 @@ def test_simple_read(delta_table_info):
         src_field="text",
         target_field="class",
         use_fixed_rank=False,
-        shuffle=False
+        shuffle=False,
     )
-    #assert len(dataset) == train_len
+    # assert len(dataset) == train_len
     val = next(iter(dataset))
     assert len(val) == 2
-    i=0
+    i = 0
     for item in dataset:
-        i+=1
+        i += 1
     print(i)
-
 
     del dataset
 

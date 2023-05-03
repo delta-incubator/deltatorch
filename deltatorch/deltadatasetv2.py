@@ -7,7 +7,9 @@ from typing import Optional, List
 from pyarrow.dataset import FileSystemDataset
 
 
-def make_batch_slice_iterator(batch_iterator, offset, size, batch_size, batches_per_epoch):
+def make_batch_slice_iterator(
+    batch_iterator, offset, size, batch_size, batches_per_epoch
+):
     """
     batch_iterator: batching defined by source
     offset: where to start in batch stream
@@ -29,7 +31,7 @@ def make_batch_slice_iterator(batch_iterator, offset, size, batch_size, batches_
             continue
 
         while slice_start < stream_offset_end:
-            assert (slice_start >= stream_offset_start)
+            assert slice_start >= stream_offset_start
             offset = slice_start - stream_offset_start
             length = min(N - offset, M)
 
@@ -51,16 +53,16 @@ def make_batch_slice_iterator(batch_iterator, offset, size, batch_size, batches_
 
 
 class DeltaIterableDataset2(IterableDataset):
-
-    def __init__(self,
-                 path: str,
-                 fields: List[str],
-                 version: Optional[int] = None,
-                 batch_size: int = 64,
-                 batches_per_epoch: int = 128,
-                 pad_batches: bool = False,
-                 deterministic_file_order: bool = False
-                 ):
+    def __init__(
+        self,
+        path: str,
+        fields: List[str],
+        version: Optional[int] = None,
+        batch_size: int = 64,
+        batches_per_epoch: int = 128,
+        pad_batches: bool = False,
+        deterministic_file_order: bool = False,
+    ):
         super(DeltaIterableDataset2).__init__()
         self.path = path
         self.fields = fields
@@ -88,15 +90,23 @@ class DeltaIterableDataset2(IterableDataset):
             raw_files = py_dataset.files
             raw_files.sort()
 
-            py_dataset = FileSystemDataset.from_paths(paths=raw_files,
-                                                      schema=py_dataset.schema,
-                                                      format=py_dataset.format,
-                                                      filesystem=py_dataset.filesystem)
+            py_dataset = FileSystemDataset.from_paths(
+                paths=raw_files,
+                schema=py_dataset.schema,
+                format=py_dataset.format,
+                filesystem=py_dataset.filesystem,
+            )
 
         scanner = py_dataset.scanner(batch_size=self.batch_size, columns=self.fields)
 
         # NOTE: Neither Pyarrow Scanner to_batch or to_reader create batches that span files (last batch of a file may not be full)
-        return make_batch_slice_iterator(scanner.to_batches(), offset=offset, size=cycle_length, batch_size=self.batch_size, batches_per_epoch=self.batches_per_epoch)
+        return make_batch_slice_iterator(
+            scanner.to_batches(),
+            offset=offset,
+            size=cycle_length,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+        )
 
     def __iter__(self):
         worker_info = get_worker_info()

@@ -66,6 +66,7 @@ class DeltaIterableDataset(IterableDataset):
     @abstractmethod
     def init_loading(self, length, path):
         pass
+
     @abstractmethod
     def stop(self):
         pass
@@ -133,10 +134,8 @@ class DeltaIterableDataset(IterableDataset):
                 item = self.queue.get(block=True, timeout=self.timeout)
                 yield item
                 i += 1
-                #if i >= self.end:
+                # if i >= self.end:
                 #    return
             except Empty:
                 print("empty ", i)
                 return
-
-
