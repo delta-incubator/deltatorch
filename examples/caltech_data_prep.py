@@ -2,7 +2,7 @@
 import os
 
 from pyspark.sql import SparkSession, Window
-from pyspark.sql.functions import row_number, lit
+from pyspark.sql.functions import row_number, lit, rand
 from pyspark.sql.types import StructType, StructField, BinaryType, LongType
 
 from torchvision.datasets import Caltech256
@@ -19,7 +19,7 @@ if locals().get("spark") is None:
     spark = (
         SparkSession.builder.master("local[*]")
         .config("spark.driver.memory", "25G")
-        .config("spark.jars.packages", "io.delta:delta-core_2.12:1.2.1")
+        .config("spark.jars.packages", "io.delta:delta-core_2.12:2.3.0")
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
         .config(
             "spark.sql.catalog.spark_catalog",
@@ -89,9 +89,8 @@ def split_spark_df(df):
 
 
 def store_as_delta(df, name):
-    df = df.withColumn("new_column", lit("ABC"))
-    w = Window().partitionBy("new_column").orderBy(lit("A"))
-    df.withColumn("id", row_number().over(w)).drop("new_column").write.format(
+    w = Window().orderBy(rand())
+    df.withColumn("id", row_number().over(w)).write.format(
         "delta"
     ).mode("overwrite").save(name)
 
