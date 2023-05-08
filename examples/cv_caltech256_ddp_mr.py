@@ -1,6 +1,9 @@
 # Databricks notebook source
-# MAGIC %pip install pytorch_lightning git+https://github.com/mshtelma/deltatorch
+# MAGIC %pip install torch==2.0.0 pytorch-lightning==2.0.0
 
+# COMMAND ----------
+
+# MAGIC %pip install pytorch_lightning git+https://github.com/mshtelma/deltatorch
 
 # COMMAND ----------
 
@@ -144,6 +147,9 @@ class LitModel(pl.LightningModule):
 
 
 def train_distributed():
+    #import logging
+    #logging.basicConfig(level=logging.DEBUG)  
+
     torch.set_float32_matmul_precision("medium")
 
     # early_stop_callback = pl.callbacks.EarlyStopping(monitor="train_loss")
@@ -152,16 +158,9 @@ def train_distributed():
     # Initialize a trainer
     trainer = pl.Trainer(
         accelerator="gpu",
-        devices=1,
-        # num_nodes=4,
         strategy="ddp",
         default_root_dir="/dbfs/tmp/trainer_logs",
         max_epochs=1,
-        # replace_sampler_ddp=False
-        # auto_scale_batch_size=True,
-        # reload_dataloaders_every_n_epochs=1
-        # gpus=1,
-        # callbacks=[early_stop_callback, checkpoint_callback],
     )
 
     print(f"Global Rank: {trainer.global_rank}")
@@ -185,7 +184,9 @@ def train_distributed():
 
 from pyspark.ml.torch.distributor import TorchDistributor
 
-distributed = TorchDistributor(num_processes=2, local_mode=False, use_gpu=True)
+distributed = TorchDistributor(num_processes=4, local_mode=True, use_gpu=True)
 distributed.run(train_distributed)
 
 # COMMAND ----------
+
+
