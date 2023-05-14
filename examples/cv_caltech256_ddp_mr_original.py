@@ -23,7 +23,6 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
 
 
-
 class DeltaDataModule(pl.LightningDataModule):
     def __init__(self, rank: int = -1, num_ranks: int = -1):
         super().__init__()
@@ -43,19 +42,28 @@ class DeltaDataModule(pl.LightningDataModule):
         )
 
         self.ds = Caltech256("/local_disk0", transform=self.transform, download=True)
-        lengths = [int(len(self.ds)*0.8), len(self.ds)-int(len(self.ds)*0.8)]
+        lengths = [int(len(self.ds) * 0.8), len(self.ds) - int(len(self.ds) * 0.8)]
         self.train_ds, self.val_ds = random_split(self.ds, lengths)
 
         self.num_classes = 257
 
     def train_dataloader(self):
-        return DataLoader(self.train_ds,   batch_size=384,)
+        return DataLoader(
+            self.train_ds,
+            batch_size=384,
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val_ds,  batch_size=384,)
+        return DataLoader(
+            self.val_ds,
+            batch_size=384,
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.val_ds,    batch_size=384,)
+        return DataLoader(
+            self.val_ds,
+            batch_size=384,
+        )
 
 
 class LitModel(pl.LightningModule):
@@ -123,8 +131,8 @@ class LitModel(pl.LightningModule):
 
 
 def train_distributed():
-    #import logging
-    #logging.basicConfig(level=logging.DEBUG)  
+    # import logging
+    # logging.basicConfig(level=logging.DEBUG)
 
     torch.set_float32_matmul_precision("medium")
 
@@ -164,5 +172,3 @@ distributed = TorchDistributor(num_processes=4, local_mode=True, use_gpu=True)
 distributed.run(train_distributed)
 
 # COMMAND ----------
-
-

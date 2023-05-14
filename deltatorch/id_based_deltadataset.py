@@ -2,19 +2,18 @@ import io
 import logging
 import queue
 import threading
+import traceback
 from queue import Queue
 from threading import Thread
 import random
 from time import sleep
-from typing import Optional, Callable
+from typing import Optional, Callable, List, Dict
 
-import numpy as np
-from PIL import Image
 from deltalake import DeltaTable
-from torch.utils.data import get_worker_info
 import pyarrow.compute as pc
 
 from deltatorch import DeltaIterableDataset
+from deltatorch.deltadataset import FieldSpec
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +22,8 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
     def __init__(
         self,
         path: str,
-        length: int,
         id_field: str,
-        src_field: str,
-        target_field: str = None,
-        # batch_size: int = None,
-        apply_src_numpy_shape=None,
-        load_pil: bool = False,
-        transform: Optional[Callable] = None,
-        target_transform: Optional[Callable] = None,
+        fields: List[FieldSpec],
         use_fixed_rank: bool = False,
         rank: int = None,
         num_ranks: int = None,
@@ -42,13 +34,7 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
     ):
         super().__init__(
             path,
-            length,
-            src_field,
-            target_field,
-            apply_src_numpy_shape,
-            load_pil,
-            transform,
-            target_transform,
+            fields,
             use_fixed_rank,
             rank,
             num_ranks,
@@ -59,40 +45,12 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         )
         self.id_field = id_field
 
-    def init_loading(self, length, path):
+    def init_loading(self, path):
         self.delta_table = None
         self.scanner = None
         self.queue = Queue(maxsize=self.queue_size)
         self.stop_event = threading.Event()
-        self.start = 0
-        if length is not None and length > 0:
-            self.end = length
-        else:
-            self.end = self.count()
-        logger.debug(f"Dataset for path {path}. Count:{self.end}")
-        _info = get_worker_info()
-        if self.use_fixed_rank:
-            new_start = self.rank * self.end / self.num_ranks
-            new_end = (self.rank + 1) * self.end / self.num_ranks
-            self.start = new_start
-            self.end = new_end
-            logger.debug(
-                f"Using fixed rank.  Current rank: {self.rank} World size: {self.num_ranks}"
-            )
-            logger.debug(f"Start: {self.start} End: {self.end}")
-        elif _info is not None:
-            self.rank = _info.id
-            self.num_ranks = _info.num_workers
-            logger.debug(
-                f"Detected DDP process. Current rank: {self.rank} World size: {self.num_ranks}"
-            )
-            new_start = self.rank * self.end / self.num_ranks
-            new_end = (self.rank + 1) * self.end / self.num_ranks
-            logger.debug(
-                "This rank will use the follosing set of rows: {self.start}-{self.end}"
-            )
-            self.start = new_start
-            self.end = new_end
+        self.init_boundaries(path)
 
         self.workers = [
             Thread(
@@ -105,13 +63,8 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
                     self.stop_event,
                     self.shuffle,
                     self.id_field,
-                    self.fields,
-                    self.apply_src_numpy_shape,
-                    self.load_pil,
-                    self.src_field,
-                    self.target_field,
-                    self.transform,
-                    self.target_transform,
+                    self.field_specs,
+                    self.arrow_fields,
                     self.timeout,
                 ),
                 daemon=True,
@@ -131,13 +84,8 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         event: threading.Event,
         shuffle: bool,
         id_field: str,
-        fields,
-        apply_src_numpy_shape,
-        load_pil,
-        src_field,
-        target_field,
-        transform,
-        target_transform,
+        field_specs: List[FieldSpec],
+        arrow_fields: Dict,
         timeout,
     ):
         try:
@@ -150,12 +98,12 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
                 )
             delta_table = DeltaTable(path)
             scanner = delta_table.to_pyarrow_dataset().scanner(
-                columns=fields, filter=_filter
+                columns=arrow_fields, filter=_filter
             )
-            #while not event.is_set():
+            # while not event.is_set():
             for rb in scanner.to_reader():
                 if event.is_set():
-                  break
+                    break
                 num_rows = rb.num_rows
                 # pylist = rb.to_pylist()
                 indexes = list(range(num_rows))
@@ -164,22 +112,10 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
 
                 for i in indexes:
                     item = rb.slice(offset=i, length=1).to_pylist()[0]
-                    # pylist[i]
-                    if apply_src_numpy_shape is not None:
-                        item[src_field] = np.frombuffer(
-                            item[src_field], dtype=np.uint8
-                        ).reshape(apply_src_numpy_shape)
-                    if load_pil:
-                        item[src_field] = Image.open(io.BytesIO(item[src_field]))
-                    if transform is not None:
-                        item[src_field] = transform(item[src_field])
-                    if target_field is not None and target_transform is not None:
-                        item[target_field] = target_transform(item[target_field])
+                    item = DeltaIterableDataset.decode_and_transform_record(
+                        item, field_specs
+                    )
                     try:
-                        if target_field:
-                          item = (item[src_field], item.get(target_field))
-                        else:
-                          item = item[src_field]
                         q.put(
                             item,
                             block=True,
@@ -192,15 +128,10 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
                         logger.debug("full")
                         sleep(1)
                     except Exception as e:
-                        print(e)
+                        traceback.print_exception(e)
 
         except Exception as e:
-            print(e)
-
-    def __len__(self):
-        if not self.loaded:
-            self.init_loading(self.length, self.path)
-        return int(self.end - self.start)
+            traceback.print_exception(e)
 
     def stop(self):
         self.stop_event.set()

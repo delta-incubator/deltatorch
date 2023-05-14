@@ -1,20 +1,17 @@
-from typing import Optional, Callable
+from typing import Optional, Callable, List, Any
 
 from torch.utils.data import DataLoader
+
+from .deltadataset import FieldSpec
 from .id_based_deltadataset import IDBasedDeltaDataset
 
 
 def create_pytorch_dataloader(
     path: str,
-    length: int,
     id_field: str,
-    src_field: str,
-    target_field: str = None,
+    fields: List[FieldSpec],
     batch_size: int = None,
-    apply_src_numpy_shape=None,
-    load_pil: bool = False,
-    transform: Optional[Callable] = None,
-    target_transform: Optional[Callable] = None,
+    collate_fn: Optional[Callable[[List], Any]] = None,
     use_fixed_rank: bool = False,
     rank: int = None,
     num_ranks: int = None,
@@ -25,14 +22,8 @@ def create_pytorch_dataloader(
 ):
     dataset = IDBasedDeltaDataset(
         path,
-        length,
         id_field,
-        src_field,
-        target_field,
-        apply_src_numpy_shape,
-        load_pil,
-        transform,
-        target_transform,
+        fields,
         use_fixed_rank,
         rank,
         num_ranks,
@@ -47,4 +38,5 @@ def create_pytorch_dataloader(
         batch_size=batch_size,
         shuffle=False,
         num_workers=0,
+        collate_fn=collate_fn,
     )

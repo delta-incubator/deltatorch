@@ -5,7 +5,7 @@ import threading
 from queue import Queue
 from threading import Thread
 import random
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 
 import numpy as np
 from PIL import Image
@@ -13,6 +13,7 @@ from deltalake import DeltaTable
 from torch.utils.data import get_worker_info
 
 from deltatorch import DeltaIterableDataset
+from deltatorch.deltadataset import FieldSpec
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +22,7 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
     def __init__(
         self,
         path: str,
-        length: int,
-        src_field: str,
-        target_field: str,
-        apply_src_numpy_shape=None,
-        load_pil: bool = False,
-        transform: Optional[Callable] = None,
-        target_transform: Optional[Callable] = None,
+        fields: List[FieldSpec],
         use_fixed_rank: bool = False,
         rank: int = None,
         num_ranks: int = None,
@@ -38,13 +33,7 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
     ):
         super().__init__(
             path,
-            length,
-            src_field,
-            target_field,
-            apply_src_numpy_shape,
-            load_pil,
-            transform,
-            target_transform,
+            fields,
             use_fixed_rank,
             rank,
             num_ranks,
@@ -54,23 +43,14 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
             queue_size,
         )
 
-    def init_loading(self, length, path):
+    def init_loading(self, path):
         self.delta_table = None
         self.scanner = None
         self.queue = Queue(maxsize=self.queue_size)
         self.stop_event = threading.Event()
-        _info = get_worker_info()
+        self.init_boundaries(self.path)
 
-        if self.use_fixed_rank:
-            self.num_chunks = self.num_workers * self.num_ranks
-            assert self.rank > 0
-        elif _info is not None:
-            self.rank = _info.id
-            self.num_ranks = _info.num_workers
-            self.num_chunks = self.num_workers * self.num_ranks
-        else:
-            self.num_chunks = self.num_workers
-            self.rank = 1
+        self.num_chunks = self.num_workers * self.num_ranks
 
         self.workers = [
             Thread(
@@ -82,13 +62,8 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
                     self.rank * i,
                     self.num_chunks,
                     self.shuffle,
-                    self.fields,
-                    self.apply_src_numpy_shape,
-                    self.load_pil,
-                    self.src_field,
-                    self.target_field,
-                    self.transform,
-                    self.target_transform,
+                    self.field_specs,
+                    self.arrow_fields,
                     self.timeout,
                 ),
                 daemon=True,
@@ -107,19 +82,14 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
         chunk: int,
         num_chunks: int,
         shuffle: bool,
-        fields,
-        apply_src_numpy_shape,
-        load_pil,
-        src_field,
-        target_field,
-        transform,
-        target_transform,
+        fields_specs,
+        arrow_fields,
         timeout,
     ):
         try:
             delta_table = DeltaTable(path)
             scanner = delta_table.to_pyarrow_dataset().scanner(
-                columns=fields,
+                columns=arrow_fields,
             )
             while not event.is_set():
                 batch_id = 0
@@ -141,19 +111,13 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
 
                     for i in indexes:
                         item = rb.slice(offset=i, length=1).to_pylist()[0]
-                        if apply_src_numpy_shape is not None:
-                            item[src_field] = np.frombuffer(
-                                item[src_field], dtype=np.uint8
-                            ).reshape(apply_src_numpy_shape)
-                        if load_pil:
-                            item[src_field] = Image.open(io.BytesIO(item[src_field]))
-                        if transform is not None:
-                            item[src_field] = transform(item[src_field])
-                        if target_transform is not None:
-                            item[target_field] = target_transform(item[target_field])
+                        item = DeltaIterableDataset.decode_and_transform_record(
+                            item, fields_specs
+                        )
+
                         try:
                             q.put(
-                                (item[src_field], item[target_field]),
+                                item,
                                 block=True,
                                 timeout=timeout,
                             )

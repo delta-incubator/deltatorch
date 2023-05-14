@@ -147,8 +147,8 @@ class LitModel(pl.LightningModule):
 
 
 def train_distributed():
-    #import logging
-    #logging.basicConfig(level=logging.DEBUG)  
+    # import logging
+    # logging.basicConfig(level=logging.DEBUG)
 
     torch.set_float32_matmul_precision("medium")
 
@@ -188,5 +188,3 @@ distributed = TorchDistributor(num_processes=4, local_mode=True, use_gpu=True)
 distributed.run(train_distributed)
 
 # COMMAND ----------
-
-
