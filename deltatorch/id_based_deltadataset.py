@@ -26,7 +26,7 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         length: int,
         id_field: str,
         src_field: str,
-        target_field: str,
+        target_field: str = None,
         # batch_size: int = None,
         apply_src_numpy_shape=None,
         load_pil: bool = False,
@@ -152,41 +152,47 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
             scanner = delta_table.to_pyarrow_dataset().scanner(
                 columns=fields, filter=_filter
             )
-            while not event.is_set():
-                for rb in scanner.to_reader():
-                    num_rows = rb.num_rows
-                    # pylist = rb.to_pylist()
-                    indexes = list(range(num_rows))
-                    if shuffle:
-                        random.shuffle(indexes)
+            #while not event.is_set():
+            for rb in scanner.to_reader():
+                if event.is_set():
+                  break
+                num_rows = rb.num_rows
+                # pylist = rb.to_pylist()
+                indexes = list(range(num_rows))
+                if shuffle:
+                    random.shuffle(indexes)
 
-                    for i in indexes:
-                        item = rb.slice(offset=i, length=1).to_pylist()[0]
-                        # pylist[i]
-                        if apply_src_numpy_shape is not None:
-                            item[src_field] = np.frombuffer(
-                                item[src_field], dtype=np.uint8
-                            ).reshape(apply_src_numpy_shape)
-                        if load_pil:
-                            item[src_field] = Image.open(io.BytesIO(item[src_field]))
-                        if transform is not None:
-                            item[src_field] = transform(item[src_field])
-                        if target_transform is not None:
-                            item[target_field] = target_transform(item[target_field])
-                        try:
-                            q.put(
-                                (item[src_field], item[target_field]),
-                                block=True,
-                                timeout=timeout,
-                            )
-                            i += 1
-                            if event.is_set():
-                                return
-                        except queue.Full:
-                            logger.debug("full")
-                            sleep(1)
-                        except Exception as e:
-                            print(e)
+                for i in indexes:
+                    item = rb.slice(offset=i, length=1).to_pylist()[0]
+                    # pylist[i]
+                    if apply_src_numpy_shape is not None:
+                        item[src_field] = np.frombuffer(
+                            item[src_field], dtype=np.uint8
+                        ).reshape(apply_src_numpy_shape)
+                    if load_pil:
+                        item[src_field] = Image.open(io.BytesIO(item[src_field]))
+                    if transform is not None:
+                        item[src_field] = transform(item[src_field])
+                    if target_field is not None and target_transform is not None:
+                        item[target_field] = target_transform(item[target_field])
+                    try:
+                        if target_field:
+                          item = (item[src_field], item.get(target_field))
+                        else:
+                          item = item[src_field]
+                        q.put(
+                            item,
+                            block=True,
+                            timeout=timeout,
+                        )
+                        i += 1
+                        if event.is_set():
+                            return
+                    except queue.Full:
+                        logger.debug("full")
+                        sleep(1)
+                    except Exception as e:
+                        print(e)
 
         except Exception as e:
             print(e)

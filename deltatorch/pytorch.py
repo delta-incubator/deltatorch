@@ -9,7 +9,7 @@ def create_pytorch_dataloader(
     length: int,
     id_field: str,
     src_field: str,
-    target_field: str,
+    target_field: str = None,
     batch_size: int = None,
     apply_src_numpy_shape=None,
     load_pil: bool = False,

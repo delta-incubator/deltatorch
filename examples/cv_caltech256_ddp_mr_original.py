@@ -1,9 +1,5 @@
 # Databricks notebook source
-# MAGIC %pip install torch==2.0.0 pytorch-lightning==2.0.0
-
-# COMMAND ----------
-
-# MAGIC %pip install pytorch_lightning git+https://github.com/mshtelma/deltatorch
+# MAGIC %pip install torch==2.0.0 pytorch-lightning==2.0.0 torchvision
 
 # COMMAND ----------
 
@@ -21,10 +17,11 @@ from deltatorch import create_pytorch_dataloader
 
 # COMMAND ----------
 
-train_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x10_train.delta"
-test_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x10_test.delta"
 
-# COMMAND ----------
+from torchvision.datasets import Caltech256
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.dataset import random_split
+
 
 
 class DeltaDataModule(pl.LightningDataModule):
@@ -45,41 +42,20 @@ class DeltaDataModule(pl.LightningDataModule):
             ]
         )
 
+        self.ds = Caltech256("/local_disk0", transform=self.transform, download=True)
+        lengths = [int(len(self.ds)*0.8), len(self.ds)-int(len(self.ds)*0.8)]
+        self.train_ds, self.val_ds = random_split(self.ds, lengths)
+
         self.num_classes = 257
 
-    def dataloader(
-        self, path: str, length: int, shuffle=False, batch_size=32, num_workers=0
-    ):
-        return create_pytorch_dataloader(
-            path,
-            length,
-            src_field="image",
-            target_field="label",
-            id_field="id",
-            transform=self.transform,
-            load_pil=True,
-            num_workers=num_workers if num_workers > 0 else 2,
-            shuffle=True,
-            use_fixed_rank=True,
-            rank=self.rank,
-            num_ranks=self.num_ranks,
-            batch_size=batch_size,
-        )
-
     def train_dataloader(self):
-        return self.dataloader(
-            train_path,
-            length=306070,
-            shuffle=True,
-            batch_size=384,
-            num_workers=2,
-        )
+        return DataLoader(self.train_ds,   batch_size=384,)
 
     def val_dataloader(self):
-        return self.dataloader(test_path, length=15073)
+        return DataLoader(self.val_ds,  batch_size=384,)
 
     def test_dataloader(self):
-        return self.dataloader(test_path, length=15073)
+        return DataLoader(self.val_ds,    batch_size=384,)
 
 
 class LitModel(pl.LightningModule):

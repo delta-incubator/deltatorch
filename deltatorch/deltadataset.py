@@ -20,7 +20,7 @@ class DeltaIterableDataset(IterableDataset):
         path: str,
         length: int,
         src_field: str,
-        target_field: str,
+        target_field: str = None,
         apply_src_numpy_shape=None,
         load_pil: bool = False,
         transform: Optional[Callable] = None,
@@ -37,8 +37,9 @@ class DeltaIterableDataset(IterableDataset):
         self.path = path
         self.fields = {
             src_field: ds.field(src_field),
-            target_field: ds.field(target_field),
         }  # {field_name: ds.field(field_name) for field_name in fields}
+        if target_field:
+          self.fields[target_field]= ds.field(target_field),
         self.src_field = src_field
         self.target_field = target_field
         self.use_fixed_rank = use_fixed_rank
