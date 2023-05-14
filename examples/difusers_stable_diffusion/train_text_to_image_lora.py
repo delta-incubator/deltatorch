@@ -808,6 +808,15 @@ def main():
         unet = unet.to(torch.float32)
         unet.save_attn_procs(args.output_dir)
 
+        pipeline = DiffusionPipeline.from_pretrained(
+            args.pretrained_model_name_or_path,
+            text_encoder=text_encoder,
+            vae=vae,
+            unet=unet,
+            revision=args.revision,
+        )
+        pipeline.save_pretrained(args.output_dir)
+
         if args.push_to_hub:
             save_model_card(
                 repo_id,

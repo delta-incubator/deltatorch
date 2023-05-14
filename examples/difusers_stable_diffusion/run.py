@@ -28,43 +28,28 @@
 --learning_rate=1e-04 --lr_scheduler="constant" \
 --lr_warmup_steps=0 \
 --seed=42 \
---output_dir="/dbfs/msh/deltatorch/diffusers/sd-pokemon-model-lora" \
+--output_dir="/dbfs/msh/deltatorch/diffusers/sd-pokemon-model-lora-v01" \
 --report_to="tensorboard" \
 --validation_prompt="cute dragon creature"
 
 # COMMAND ----------
 
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, DiffusionPipeline
+import torch
 
-model_id = "stabilityai/stable-diffusion-2-1"
+model_path = "/dbfs/msh/deltatorch/diffusers/sd-pokemon-model-lora-v01/"
 
-# Use the DPMSolverMultistepScheduler (DPM-Solver++) scheduler here instead
-pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-pipe = pipe.to("cuda")
+pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", torch_dtype=torch.float16)
+pipe.unet.load_attn_procs(model_path)
+pipe.to("cuda")
 
 prompt = "a photo of an astronaut riding a horse on mars"
-image = pipe(prompt).images[0]
+image = pipe(prompt, num_inference_steps=30, guidance_scale=7.5).images[0]
 image
 
 # COMMAND ----------
 
-# MAGIC %sh accelerate launch --mixed_precision fp16 --multi_gpu  --num_processes 8 train_text_to_image.py \
-# MAGIC --pretrained_model_name_or_path CompVis/stable-diffusion-v1-4 \
-# MAGIC --dataset_name lambdalabs/pokemon-blip-captions \
-# MAGIC --use_ema \
-# MAGIC --resolution 512 \
-# MAGIC --center_crop \
-# MAGIC --random_flip \
-# MAGIC --train_batch_size 1 \
-# MAGIC --gradient_accumulation_steps 4 \
-# MAGIC --gradient_checkpointing \
-# MAGIC --max_train_steps 15000 \
-# MAGIC --enable_xformers_memory_efficient_attention \
-# MAGIC --learning_rate=1e-05 \
-# MAGIC --max_grad_norm=1 \
-# MAGIC --lr_scheduler="constant" --lr_warmup_steps=0 \
-# MAGIC --output_dir /dbfs/msh/deltatorch/diffusers/sd-pokemon-model
+image
 
 # COMMAND ----------
 
