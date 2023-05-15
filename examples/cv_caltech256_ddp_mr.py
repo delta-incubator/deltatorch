@@ -3,7 +3,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install pytorch_lightning git+https://github.com/mshtelma/deltatorch
+# MAGIC %sh cd .. && pip install  .
 
 # COMMAND ----------
 
@@ -18,6 +18,7 @@ from torchmetrics import Accuracy
 from torchvision import transforms, models
 
 from deltatorch import create_pytorch_dataloader
+from deltatorch import FieldSpec
 
 # COMMAND ----------
 
@@ -26,12 +27,9 @@ test_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x10_test.delta"
 
 # COMMAND ----------
 
-
 class DeltaDataModule(pl.LightningDataModule):
-    def __init__(self, rank: int = -1, num_ranks: int = -1):
+    def __init__(self):
         super().__init__()
-        self.rank = rank
-        self.num_ranks = num_ranks
 
         self.transform = transforms.Compose(
             [
@@ -47,66 +45,51 @@ class DeltaDataModule(pl.LightningDataModule):
 
         self.num_classes = 257
 
-    def dataloader(
-        self, path: str, length: int, shuffle=False, batch_size=32, num_workers=0
-    ):
+    def dataloader(self, path: str, batch_size=32):
         return create_pytorch_dataloader(
             path,
-            length,
-            src_field="image",
-            target_field="label",
             id_field="id",
-            transform=self.transform,
-            load_pil=True,
-            num_workers=num_workers if num_workers > 0 else 2,
+            fields=[
+                FieldSpec("image", load_image_using_pil=True, transform=self.transform),
+                FieldSpec("label"),
+            ],
             shuffle=True,
-            use_fixed_rank=True,
-            rank=self.rank,
-            num_ranks=self.num_ranks,
             batch_size=batch_size,
         )
 
     def train_dataloader(self):
         return self.dataloader(
             train_path,
-            length=306070,
-            shuffle=True,
             batch_size=384,
-            num_workers=2,
         )
 
     def val_dataloader(self):
-        return self.dataloader(test_path, length=15073)
+        return self.dataloader(test_path)
 
     def test_dataloader(self):
-        return self.dataloader(test_path, length=15073)
+        return self.dataloader(test_path)
 
 
 class LitModel(pl.LightningModule):
     def __init__(self, num_classes, learning_rate=2e-4):
         super().__init__()
-
         self.save_hyperparameters()
         self.learning_rate = learning_rate
-
         self.fc1 = nn.Linear(1000, num_classes)
-
         self.accuracy = Accuracy(task="multiclass", num_classes=num_classes)
-
         self.model = models.mobilenet_v3_large()
 
     def forward(self, x):
         x = self.model(x)
         x = x.view(x.size(0), -1)
         x = F.log_softmax(self.fc1(x), dim=1)
-
         return x
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
+        x = batch["image"]
+        y = batch["label"]
         logits = self(x)
         loss = F.nll_loss(logits, y)
-
         preds = torch.argmax(logits, dim=1)
         acc = self.accuracy(preds, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True, logger=True)
@@ -115,11 +98,10 @@ class LitModel(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch
+        x = batch["image"]
+        y = batch["label"]
         logits = self(x)
         loss = F.nll_loss(logits, y)
-
-        # validation metrics
         preds = torch.argmax(logits, dim=1)
         acc = self.accuracy(preds, y)
         self.log("val_loss", loss, prog_bar=True)
@@ -127,11 +109,10 @@ class LitModel(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        x, y = batch
+        x = batch["image"]
+        y = batch["label"]
         logits = self(x)
         loss = F.nll_loss(logits, y)
-
-        # validation metrics
         preds = torch.argmax(logits, dim=1)
         acc = self.accuracy(preds, y)
         self.log("test_loss", loss, prog_bar=True)
@@ -142,25 +123,20 @@ class LitModel(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
-
 # COMMAND ----------
 
-
-def train_distributed():
+def train_distributed(max_epochs: int = 1, strategy: str = "auto"):
     # import logging
     # logging.basicConfig(level=logging.DEBUG)
 
     torch.set_float32_matmul_precision("medium")
 
-    # early_stop_callback = pl.callbacks.EarlyStopping(monitor="train_loss")
-    # checkpoint_callback = pl.callbacks.ModelCheckpoint()
-
     # Initialize a trainer
     trainer = pl.Trainer(
         accelerator="gpu",
-        strategy="ddp",
+        strategy=strategy,
         default_root_dir="/dbfs/tmp/trainer_logs",
-        max_epochs=5,
+        max_epochs=max_epochs, callbacks=[pl.callbacks.EarlyStopping(monitor="train_loss"), pl.callbacks.ModelCheckpoint()]
     )
 
     print(f"Global Rank: {trainer.global_rank}")
@@ -168,23 +144,29 @@ def train_distributed():
 
     print(f"World Size: {trainer.world_size}")
 
-    dm = DeltaDataModule(rank=trainer.global_rank, num_ranks=trainer.world_size)
+    dm = DeltaDataModule()
 
     model = LitModel(dm.num_classes)
 
     trainer.fit(model, dm)
 
-    print("Done!")
+    print("Training done!")
 
-    # trainer.test(dataloaders=dm.test_dataloader())
-    # return trainer
-
+    trainer.test(dataloaders=dm.test_dataloader())
+    print("Test done!")
 
 # COMMAND ----------
 
 from pyspark.ml.torch.distributor import TorchDistributor
 
-distributed = TorchDistributor(num_processes=4, local_mode=True, use_gpu=True)
-distributed.run(train_distributed)
+distributed = TorchDistributor(num_processes=8, local_mode=True, use_gpu=True)
+distributed.run(train_distributed, 1, "ddp")
 
 # COMMAND ----------
+
+distributed = TorchDistributor(num_processes=8, local_mode=True, use_gpu=True)
+distributed.run(train_distributed, 10, "ddp")
+
+# COMMAND ----------
+
+

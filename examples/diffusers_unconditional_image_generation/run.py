@@ -11,13 +11,13 @@
 
 # COMMAND ----------
 
-!accelerate launch --mixed_precision="fp16" --multi_gpu --num_processes 4 train_unconditional.py \
+!accelerate launch --mixed_precision="fp16" --multi_gpu --num_processes 8 train_unconditional.py \
   --train_data_dir="/dbfs/tmp/msh/huggan_pokemon.delta" \
   --resolution=64 \
   --center_crop \
   --random_flip \
-  --output_dir="/dbfs/msh/deltatorch/diffusers/ddpm-ema-pokemon-64-v2" \
-  --train_batch_size=16 \
+  --output_dir="/dbfs/msh/deltatorch/diffusers/ddpm-ema-pokemon-64-v3" \
+  --train_batch_size=96 \
   --num_epochs=100 \
   --gradient_accumulation_steps=1 \
   --use_ema \
@@ -31,7 +31,21 @@
 
 from diffusers import DiffusionPipeline
 
-generator = DiffusionPipeline.from_pretrained("/dbfs/msh/deltatorch/diffusers/ddpm-ema-pokemon-64-v2").to("cuda")
+generator = DiffusionPipeline.from_pretrained(
+    "/dbfs/msh/deltatorch/diffusers/ddpm-ema-pokemon-64-v2"
+).to("cuda")
+
+# COMMAND ----------
+
+generator().images[0]
+
+# COMMAND ----------
+
+generator().images[0]
+
+# COMMAND ----------
+
+generator().images[0]
 
 # COMMAND ----------
 

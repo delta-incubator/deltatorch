@@ -168,7 +168,5 @@ def train_distributed():
 
 from pyspark.ml.torch.distributor import TorchDistributor
 
-distributed = TorchDistributor(num_processes=4, local_mode=True, use_gpu=True)
+distributed = TorchDistributor(num_processes=8, local_mode=True, use_gpu=True)
 distributed.run(train_distributed)
-
-# COMMAND ----------
