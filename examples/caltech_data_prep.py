@@ -90,9 +90,9 @@ def split_spark_df(df):
 
 def store_as_delta(df, name):
     w = Window().orderBy(rand())
-    df.withColumn("id", row_number().over(w)).write.format(
-        "delta"
-    ).mode("overwrite").save(name)
+    df.withColumn("id", row_number().over(w)).write.format("delta").mode(
+        "overwrite"
+    ).save(name)
 
 
 full_df = prepare_caltech_data(iter_count=10)
