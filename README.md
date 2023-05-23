@@ -46,22 +46,24 @@ USING delta LOCATION 'path'
 After the table is ready we can use the `create_pytorch_dataloader` function to create a PyTorch DataLoader :
 ```python
 from deltatorch import create_pytorch_dataloader
+from deltatorch import FieldSpec
 
-def create_data_loader(path:str, length:int, batch_size:int):
+def create_data_loader(path:str, batch_size:int):
 
     return create_pytorch_dataloader(
         # Path to the DeltaLake table
         path,
-        # Length of the table. Can be easily pre-calculated using spark.read.load(path).count()
-        length,
-        # Field used as a source (X)
-        src_field="image",
-        # Target field (Y)
-        target_field="label",
         # Autoincrement ID field
         id_field="id",
-        # Load image using Pillow
-        load_pil=True,
+        # Fields which will be used during training
+        fields=[
+            FieldSpec("image",
+                      # Load image using Pillow
+                      load_image_using_pil=True, 
+                      # PyTorch Transform
+                      transform=transform),
+            FieldSpec("label"),
+        ],
         # Number of readers 
         num_workers=2,
         # Shuffle data inside the record batches
