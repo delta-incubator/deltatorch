@@ -1,14 +1,14 @@
 # Databricks notebook source
-!/databricks/python3/bin/python -m pip install diffusers==0.16.1 accelerate>=0.18.0 torch==2.0.0 torchvision datasets  xformers tensorboard git+https://github.com/mshtelma/deltatorch ftfy tensorboard Jinja2
+# MAGIC !/databricks/python3/bin/python -m pip install diffusers==0.16.1 accelerate>=0.18.0 torch==2.0.0 torchvision datasets  xformers tensorboard git+https://github.com/mshtelma/deltatorch ftfy tensorboard Jinja2
 
 # COMMAND ----------
 
-!/databricks/python3/bin/python -m pip install  git+https://github.com/huggingface/diffusers.git
+# MAGIC !/databricks/python3/bin/python -m pip install  git+https://github.com/huggingface/diffusers.git
 
 
 # COMMAND ----------
 
-!cd ../../ && /databricks/python3/bin/python -m pip install  -U .
+# MAGIC !cd ../../ && /databricks/python3/bin/python -m pip install  -U .
 
 # COMMAND ----------
 
@@ -16,20 +16,20 @@
 
 # COMMAND ----------
 
-!accelerate launch --mixed_precision fp16 --multi_gpu  --num_processes 8 train_text_to_image_lora.py \
---pretrained_model_name_or_path="CompVis/stable-diffusion-v1-4" \
---train_data_dir="/dbfs/tmp/msh/lambdalabs_pokemon_blip_captions.delta" \
---resolution=512 \
---random_flip \
---train_batch_size=5 \
---num_train_epochs=100 \
---checkpointing_steps=1000 \
---learning_rate=1e-04 --lr_scheduler="constant" \
---lr_warmup_steps=0 \
---seed=42 \
---output_dir="/dbfs/msh/deltatorch/diffusers/sd-pokemon-model-lora-v3" \
---report_to="tensorboard" \
---validation_prompt="cute dragon creature"
+# MAGIC !accelerate launch --mixed_precision fp16 --multi_gpu  --num_processes 8 train_text_to_image_lora.py \
+# MAGIC --pretrained_model_name_or_path="CompVis/stable-diffusion-v1-4" \
+# MAGIC --train_data_dir="/dbfs/tmp/msh/lambdalabs_pokemon_blip_captions.delta" \
+# MAGIC --resolution=512 \
+# MAGIC --random_flip \
+# MAGIC --train_batch_size=5 \
+# MAGIC --num_train_epochs=100 \
+# MAGIC --checkpointing_steps=1000 \
+# MAGIC --learning_rate=1e-04 --lr_scheduler="constant" \
+# MAGIC --lr_warmup_steps=0 \
+# MAGIC --seed=42 \
+# MAGIC --output_dir="/dbfs/msh/deltatorch/diffusers/sd-pokemon-model-lora-v3" \
+# MAGIC --report_to="tensorboard" \
+# MAGIC --validation_prompt="cute dragon creature"
 
 # COMMAND ----------
 
@@ -50,7 +50,11 @@ image
 
 # COMMAND ----------
 
-pipe("a photo of an astronaut riding a horse on mars", num_inference_steps=50, guidance_scale=7.5).images[0]
+pipe(
+    "a photo of an astronaut riding a horse on mars",
+    num_inference_steps=50,
+    guidance_scale=7.5,
+).images[0]
 
 # COMMAND ----------
 
@@ -65,5 +69,3 @@ pipe("Dinasours and pokemons", num_inference_steps=50, guidance_scale=7.5).image
 pipe("Dinasours in central park", num_inference_steps=50, guidance_scale=7.5).images[0]
 
 # COMMAND ----------
-
-

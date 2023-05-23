@@ -27,6 +27,7 @@ test_path = "/dbfs/tmp/msh/datasets/caltech256_duplicated_x10_test.delta"
 
 # COMMAND ----------
 
+
 class DeltaDataModule(pl.LightningDataModule):
     def __init__(self):
         super().__init__()
@@ -123,7 +124,9 @@ class LitModel(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
+
 # COMMAND ----------
+
 
 def train_distributed(max_epochs: int = 1, strategy: str = "auto"):
     # import logging
@@ -136,7 +139,11 @@ def train_distributed(max_epochs: int = 1, strategy: str = "auto"):
         accelerator="gpu",
         strategy=strategy,
         default_root_dir="/dbfs/tmp/trainer_logs",
-        max_epochs=max_epochs, callbacks=[pl.callbacks.EarlyStopping(monitor="train_loss"), pl.callbacks.ModelCheckpoint()]
+        max_epochs=max_epochs,
+        callbacks=[
+            pl.callbacks.EarlyStopping(monitor="train_loss"),
+            pl.callbacks.ModelCheckpoint(),
+        ],
     )
 
     print(f"Global Rank: {trainer.global_rank}")
@@ -155,6 +162,7 @@ def train_distributed(max_epochs: int = 1, strategy: str = "auto"):
     trainer.test(dataloaders=dm.test_dataloader())
     print("Test done!")
 
+
 # COMMAND ----------
 
 from pyspark.ml.torch.distributor import TorchDistributor
@@ -168,5 +176,3 @@ distributed = TorchDistributor(num_processes=8, local_mode=True, use_gpu=True)
 distributed.run(train_distributed, 10, "ddp")
 
 # COMMAND ----------
-
-
