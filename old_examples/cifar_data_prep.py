@@ -4,7 +4,7 @@
 # COMMAND ----------
 
 from pyspark.sql import SparkSession, Window
-from pyspark.sql.functions import row_number, lit
+from pyspark.sql.functions import row_number, rand
 from pyspark.sql.types import StructType, StructField, BinaryType, LongType
 
 from torchvision.datasets import CIFAR10
@@ -19,7 +19,7 @@ train_read_path = "/tmp/msh/datasets/cifar"
 if locals().get("spark") is None:
     spark = (
         SparkSession.builder.master("local[*]")
-        .config("spark.jars.packages", "io.delta:delta-core_2.12:1.2.1")
+        .config("spark.jars.packages", "io.delta:delta-core_2.12:2.3.0")
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
         .config(
             "spark.sql.catalog.spark_catalog",
@@ -49,13 +49,10 @@ def prepare_cifar_data(is_train: bool = True, iter_count: int = 1):
         else:
             df = _df
 
-    df = df.withColumn("new_column", lit("ABC"))
-    w = Window().partitionBy("new_column").orderBy(lit("A"))
-    df.withColumn("id", row_number().over(w)).drop("new_column").write.format(
-        "delta"
-    ).mode("overwrite").save(
-        f"{spark_write_path}_{'train' if is_train else 'test'}.delta"
-    )
+    w = Window().orderBy(rand())
+    df.withColumn("id", row_number().over(w)).write.format("delta").mode(
+        "overwrite"
+    ).save(f"{spark_write_path}_{'train' if is_train else 'test'}.delta")
     spark.read.format("delta").load(
         f"{spark_write_path}_{'train' if is_train else 'test'}.delta"
     ).select("id", "label").show(100, False)

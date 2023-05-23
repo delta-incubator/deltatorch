@@ -7,7 +7,7 @@ from torchtext.datasets import AG_NEWS
 
 import pytest
 
-from deltatorch import create_pytorch_dataloader
+from deltatorch import create_pytorch_dataloader, FieldSpec
 from deltatorch.id_based_deltadataset import IDBasedDeltaDataset
 from deltatorch.skip_batch_deltadataset import SkipReadDeltaDataset
 
@@ -29,23 +29,27 @@ def delta_table_info(tmpdir) -> Tuple[str, int]:
 
 def test_simple_read(delta_table_info):
     delta_path, train_len = delta_table_info
-    dt = DeltaTable(delta_path)
-    files = dt.files_by_partitions([])
-    print(files)
-    print(dt.metadata())
-    print(dt.protocol())
-    print(dt.version())
-    print(dt.to_pandas().count()[0])
-    print(dt.history(1))
+
     dataset = SkipReadDeltaDataset(
         delta_path,
-        length=train_len,
-        src_field="text",
-        target_field="class",
+        fields=[
+            FieldSpec(
+                "text",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+            FieldSpec(
+                "class",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+        ],
         use_fixed_rank=False,
         shuffle=False,
     )
-    # assert len(dataset) == train_len
+    assert len(dataset) == train_len
     val = next(iter(dataset))
     assert len(val) == 2
     i = 0
@@ -54,50 +58,3 @@ def test_simple_read(delta_table_info):
     print(i)
 
     del dataset
-
-
-def test_sharded_read(delta_table_info):
-    delta_path, train_len = delta_table_info
-
-    dataset = IDBasedDeltaDataset(
-        delta_path,
-        length=train_len,
-        id_field="id",
-        src_field="text",
-        target_field="class",
-        use_fixed_rank=True,
-        rank=2,
-        num_ranks=4,
-    )
-    ds_len = len(dataset)
-    expected_shard_len = int(train_len / 4)
-    assert ds_len == expected_shard_len
-
-    it = iter(dataset)
-    for _ in range(expected_shard_len):
-        item = next(it)
-        assert item is not None
-    del dataset
-
-
-def test_pt_dataloader(delta_table_info):
-    delta_path, train_len = delta_table_info
-
-    dl = create_pytorch_dataloader(
-        delta_path,
-        length=train_len,
-        id_field="id",
-        src_field="text",
-        target_field="class",
-        use_fixed_rank=True,
-        rank=2,
-        num_ranks=4,
-    )
-
-    expected_shard_len = int(train_len / 4)
-
-    it = iter(dl)
-    for _ in range(expected_shard_len):
-        item = next(it)
-        assert item is not None
-    del dl

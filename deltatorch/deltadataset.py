@@ -1,30 +1,38 @@
+import io
 import logging
 import math
 import threading
-from abc import abstractmethod
+from abc import abstractmethod, ABC
+from dataclasses import dataclass
 from queue import Queue
 from queue import Empty
 
+import numpy as np
+import torch.distributed
+from PIL import Image
 from deltalake import DeltaTable
-from torch.utils.data import get_worker_info, IterableDataset
+from torch.utils.data import IterableDataset
 import pyarrow.dataset as ds
 import pyarrow.compute as pc
-from typing import Optional, Callable
+from typing import Optional, Callable, List, Tuple, Dict, Any
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FieldSpec(ABC):
+    name: str
+    decode_numpy_and_apply_shape: Optional[Tuple[int, int]] = None
+    load_image_using_pil: bool = False
+    transform: Optional[Callable] = None
+    target_name: Optional[str] = None
 
 
 class DeltaIterableDataset(IterableDataset):
     def __init__(
         self,
         path: str,
-        length: int,
-        src_field: str,
-        target_field: str,
-        apply_src_numpy_shape=None,
-        load_pil: bool = False,
-        transform: Optional[Callable] = None,
-        target_transform: Optional[Callable] = None,
+        fields: List[FieldSpec],
         use_fixed_rank: bool = False,
         rank: int = None,
         num_ranks: int = None,
@@ -35,27 +43,16 @@ class DeltaIterableDataset(IterableDataset):
     ) -> None:
         super().__init__()
         self.path = path
-        self.fields = {
-            src_field: ds.field(src_field),
-            target_field: ds.field(target_field),
-        }  # {field_name: ds.field(field_name) for field_name in fields}
-        self.src_field = src_field
-        self.target_field = target_field
+        self.field_specs = fields
+        self.arrow_fields = {field.name: ds.field(field.name) for field in fields}
         self.use_fixed_rank = use_fixed_rank
         self.rank = rank
         self.num_ranks = num_ranks
         self.num_workers = num_workers
-        self.apply_src_numpy_shape = apply_src_numpy_shape
-        self.load_pil = load_pil
-        self.transform = transform
-        self.target_transform = target_transform
         self.shuffle = shuffle
         self.timeout = timeout
-        self.length = length
         self.path = path
         self.queue_size = queue_size
-
-        self.loaded = False
 
         self.queue = Queue(maxsize=queue_size)
         self.stop_event = threading.Event()
@@ -63,71 +60,78 @@ class DeltaIterableDataset(IterableDataset):
         self.scanner = None
         self.workers = []
 
+        self.loaded = False
+        self.boundaries_set = False
+
     @abstractmethod
-    def init_loading(self, length, path):
+    def init_loading(self, path):
         pass
+
+    def init_boundaries(self, path, init_start_end: bool = True):
+        self.start = 0
+        self.end = self.count()
+        logger.debug(f"Dataset for path {path}. Count:{self.end}")
+
+        if self.use_fixed_rank:
+            if init_start_end:
+                new_start = self.rank * self.end / self.num_ranks
+                new_end = (self.rank + 1) * self.end / self.num_ranks
+                self.start = new_start
+                self.end = new_end
+                logger.debug(
+                    f"Using fixed rank.  Current rank: {self.rank} World size: {self.num_ranks}"
+                )
+                logger.debug(f"Start: {self.start} End: {self.end}")
+        elif torch.distributed.is_initialized():
+            self.num_ranks = torch.distributed.get_world_size()
+            self.rank = torch.distributed.get_rank()
+            if init_start_end:
+                logger.debug(
+                    f"Detected DDP process. Current rank: {self.rank} World size: {self.num_ranks}"
+                )
+                new_start = self.rank * self.end / self.num_ranks
+                new_end = (self.rank + 1) * self.end / self.num_ranks
+                logger.debug(
+                    "This rank will use the following set of rows: {self.start}-{self.end}"
+                )
+                self.start = new_start
+                self.end = new_end
+        else:
+            self.num_ranks = 1
+            self.rank = 1
+        self.boundaries_set = True
 
     @abstractmethod
     def stop(self):
         pass
 
-    def _get_active_spark_session(self):
-        try:
-            from pyspark.sql import SparkSession
-        except ImportError:
-            return None
-        try:
-            return SparkSession.getActiveSession()
-        except Exception:
-            return None
+    @staticmethod
+    def decode_and_transform_record(
+        item: Dict[str, Any], field_specs: List[FieldSpec]
+    ) -> Dict[str, Any]:
+        for spec in field_specs:
+            _target_name = spec.target_name if spec.target_name else spec.name
+            _item = item[spec.name]
+            if spec.decode_numpy_and_apply_shape:
+                _item = np.frombuffer(_item, dtype=np.uint8).reshape(
+                    spec.decode_numpy_and_apply_shape
+                )
+            if spec.load_image_using_pil:
+                _item = Image.open(io.BytesIO(_item))
+            if spec.transform:
+                _item = spec.transform(_item)
+            item[_target_name] = _item
+        return item
 
     def count(self):
-        spark = self._get_active_spark_session()
-        if spark is not None:
-            logger.debug("Using spark to determine length..")
-            _dbfs_path = self.path.replace("/dbfs/", "dbfs:/")
-            return spark.read.format("delta").load(_dbfs_path).count()
-        else:
-            _cnt = 0
-            for rb in self.init_scanner().to_reader():
-                _cnt += rb.num_rows
-            return _cnt
-
-    def init_scanner_and_apply_rank(self):
-        _info = get_worker_info()
-        if self.use_fixed_rank:
-            return self.init_scanner(
-                use_rank=True, rank=self.rank, num_ranks=self.num_ranks
-            )
-        elif _info is not None:
-            return self.init_scanner(
-                use_rank=True, rank=_info.id, num_ranks=_info.num_workers
-            )
-        else:
-            return self.init_scanner(use_rank=False)
-
-    def init_scanner(self, use_rank: bool = False, rank: int = -1, num_ranks: int = -1):
-        if self.delta_table is None:
-            self.delta_table = DeltaTable(self.path)
-            _filter = None
-            if use_rank:
-                per_worker = int(math.ceil((self.end - self.start) / float(num_ranks)))
-                iter_start = self.start + rank * per_worker
-                iter_end = min(iter_start + per_worker, self.end)
-                _filter = (pc.field(self.id_field) >= pc.scalar(iter_start)) & (
-                    pc.field(self.id_field) <= pc.scalar(iter_end)
-                )
-                # pc.bit_wise_and(pc.field(self.id_field), pc.scalar(num_ranks - 1)) == pc.scalar(rank)
-
-            self.scanner = self.delta_table.to_pyarrow_dataset().scanner(
-                columns=self.fields, filter=_filter
-            )
-        return self.scanner
+        _delta_table = DeltaTable(self.path)
+        _add_actions = _delta_table.get_add_actions().to_pandas()
+        return _add_actions["num_records"].sum()
 
     def __iter__(self):
         if self.loaded:
             self.stop()
-        self.init_loading(self.length, self.path)
+        self.init_loading(self.path)
         i = 0
         while True:
             try:
@@ -139,3 +143,8 @@ class DeltaIterableDataset(IterableDataset):
             except Empty:
                 print("empty ", i)
                 return
+
+    def __len__(self):
+        if not self.boundaries_set:
+            self.init_boundaries(self.path)
+        return int(self.end - self.start)

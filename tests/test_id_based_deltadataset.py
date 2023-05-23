@@ -6,7 +6,7 @@ from torchtext.datasets import AG_NEWS
 
 import pytest
 
-from deltatorch import create_pytorch_dataloader
+from deltatorch import create_pytorch_dataloader, FieldSpec
 from deltatorch.id_based_deltadataset import IDBasedDeltaDataset
 
 
@@ -29,10 +29,21 @@ def test_simple_read(delta_table_info):
     delta_path, train_len = delta_table_info
     dataset = IDBasedDeltaDataset(
         delta_path,
-        length=train_len,
         id_field="id",
-        src_field="text",
-        target_field="class",
+        fields=[
+            FieldSpec(
+                "text",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+            FieldSpec(
+                "class",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+        ],
         use_fixed_rank=False,
     )
     assert len(dataset) == train_len
@@ -49,10 +60,21 @@ def test_sharded_read(delta_table_info):
     delta_path, train_len = delta_table_info
     dataset = IDBasedDeltaDataset(
         delta_path,
-        length=train_len,
         id_field="id",
-        src_field="text",
-        target_field="class",
+        fields=[
+            FieldSpec(
+                "text",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+            FieldSpec(
+                "class",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+        ],
         use_fixed_rank=True,
         rank=2,
         num_ranks=4,
@@ -73,19 +95,32 @@ def test_pt_dataloader(delta_table_info):
 
     dl = create_pytorch_dataloader(
         delta_path,
-        length=train_len,
         id_field="id",
-        src_field="text",
-        target_field="class",
+        fields=[
+            FieldSpec(
+                "text",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+            FieldSpec(
+                "class",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+        ],
         use_fixed_rank=True,
         rank=2,
         num_ranks=4,
     )
-
     expected_shard_len = int(train_len / 4)
+    assert len(dl) == expected_shard_len
 
     it = iter(dl)
     for _ in range(expected_shard_len):
         item = next(it)
         assert item is not None
+        assert item["class"] is not None
+        assert item["text"] is not None
     del dl
