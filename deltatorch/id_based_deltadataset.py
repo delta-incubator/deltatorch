@@ -1,16 +1,11 @@
-import io
 import logging
-import queue
-import threading
-import traceback
-from queue import Queue
-from threading import Thread
+import math
 import random
-from time import sleep
-from typing import Optional, Callable, List, Dict
+from typing import List
 
-from deltalake import DeltaTable
 import pyarrow.compute as pc
+from deltalake import DeltaTable
+from torch.utils.data import get_worker_info
 
 from deltatorch import DeltaIterableDataset
 from deltatorch.deltadataset import FieldSpec
@@ -29,8 +24,8 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         num_ranks: int = None,
         num_workers: int = 2,
         shuffle: bool = False,
-        timeout: int = 15,
-        queue_size: int = 25000,
+        batch_size: int = 32,
+        drop_last: bool = False
     ):
         super().__init__(
             path,
@@ -40,109 +35,41 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
             num_ranks,
             num_workers,
             shuffle,
-            timeout,
-            queue_size,
+            batch_size,
+            drop_last
         )
         self.id_field = id_field
 
-    def init_loading(self, path):
-        self.delta_table = None
-        self.scanner = None
-        self.queue = Queue(maxsize=self.queue_size)
-        self.stop_event = threading.Event()
-        self.init_boundaries(path)
+    def calculater_iteration_boundaries(self):
+        worker_info = get_worker_info()
+        if worker_info is None:
+            return self.start, self.end
+        else:
+            per_worker_data_count = int(math.ceil((self.end - self.start) / float(worker_info.num_workers)))
+            worker_id = worker_info.id
+            iter_start = self.start + worker_id * per_worker_data_count
+            iter_end = min(iter_start + per_worker_data_count, self.end)
+        return iter_start, iter_end
 
-        self.workers = [
-            Thread(
-                target=self.worker_fn,
-                args=(
-                    self.path,
-                    self.start + i * (self.end - self.start) / self.num_workers,
-                    self.start + (i + 1) * (self.end - self.start) / self.num_workers,
-                    self.queue,
-                    self.stop_event,
-                    self.shuffle,
-                    self.id_field,
-                    self.field_specs,
-                    self.arrow_fields,
-                    self.timeout,
-                ),
-                daemon=True,
+    def process_data(self):
+        _filter = None
+        iter_start, iter_end = self.calculater_iteration_boundaries()
+        if iter_end > 0 and iter_start >= 0:
+            _filter = (pc.field(self.id_field) >= pc.scalar(iter_start)) & (
+                    pc.field(self.id_field) < pc.scalar(iter_end)
             )
-            for i in range(self.num_workers)
-        ]
-        for w in self.workers:
-            w.start()
-        self.loaded = True
-
-    @staticmethod
-    def worker_fn(
-        path: str,
-        start: int,
-        end: int,
-        q: Queue,
-        event: threading.Event,
-        shuffle: bool,
-        id_field: str,
-        field_specs: List[FieldSpec],
-        arrow_fields: Dict,
-        timeout,
-    ):
-        try:
-            logger.debug(f"Started worker for path {path} and range: {start}-{end}")
-            # i = 0
-            _filter = None
-            if end > 0 and start >= 0:
-                _filter = (pc.field(id_field) >= pc.scalar(start)) & (
-                    pc.field(id_field) <= pc.scalar(end)
+        delta_table = DeltaTable(self.path)
+        scanner = delta_table.to_pyarrow_dataset().scanner(
+            columns=self.arrow_fields, filter=_filter
+        )
+        for rb in scanner.to_reader():
+            num_rows = rb.num_rows
+            indexes = list(range(num_rows))
+            if self.shuffle:
+                random.shuffle(indexes)
+            for i in indexes:
+                item = rb.slice(offset=i, length=1).to_pylist()[0]
+                item = DeltaIterableDataset.decode_and_transform_record(
+                    item, self.field_specs
                 )
-            delta_table = DeltaTable(path)
-            scanner = delta_table.to_pyarrow_dataset().scanner(
-                columns=arrow_fields, filter=_filter
-            )
-            # while not event.is_set():
-            for rb in scanner.to_reader():
-                if event.is_set():
-                    break
-                num_rows = rb.num_rows
-                # pylist = rb.to_pylist()
-                indexes = list(range(num_rows))
-                if shuffle:
-                    random.shuffle(indexes)
-
-                for i in indexes:
-                    item = rb.slice(offset=i, length=1).to_pylist()[0]
-                    item = DeltaIterableDataset.decode_and_transform_record(
-                        item, field_specs
-                    )
-                    try:
-                        q.put(
-                            item,
-                            block=True,
-                            timeout=timeout,
-                        )
-                        i += 1
-                        if event.is_set():
-                            return
-                    except queue.Full:
-                        logger.debug("full")
-                        sleep(1)
-                    except Exception as e:
-                        traceback.print_exception(e)
-
-        except Exception as e:
-            traceback.print_exception(e)
-
-    def stop(self):
-        self.stop_event.set()
-        self.loaded = False
-        self.delta_table = None
-        self.scanner = None
-        self.queue = None
-        if self.workers:
-            for w in self.workers:
-                w.join(self.timeout)
-        self.workers = []
-
-    def __del__(self):
-        self.stop()
+                yield item
