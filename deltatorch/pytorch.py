@@ -29,7 +29,7 @@ def create_pytorch_dataloader(
         num_workers,
         shuffle,
         batch_size,
-        drop_last
+        drop_last,
     )
 
     return DataLoader(
@@ -38,5 +38,5 @@ def create_pytorch_dataloader(
         shuffle=False,
         num_workers=num_workers,
         collate_fn=collate_fn,
-        drop_last=drop_last
+        drop_last=drop_last,
     )

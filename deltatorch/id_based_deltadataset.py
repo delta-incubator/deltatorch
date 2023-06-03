@@ -25,7 +25,7 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         num_workers: int = 2,
         shuffle: bool = False,
         batch_size: int = 32,
-        drop_last: bool = False
+        drop_last: bool = False,
     ):
         super().__init__(
             path,
@@ -36,7 +36,7 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
             num_workers,
             shuffle,
             batch_size,
-            drop_last
+            drop_last,
         )
         self.id_field = id_field
 
@@ -45,7 +45,9 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         if worker_info is None:
             return self.start, self.end
         else:
-            per_worker_data_count = int(math.ceil((self.end - self.start) / float(worker_info.num_workers)))
+            per_worker_data_count = int(
+                math.ceil((self.end - self.start) / float(worker_info.num_workers))
+            )
             worker_id = worker_info.id
             iter_start = self.start + worker_id * per_worker_data_count
             iter_end = min(iter_start + per_worker_data_count, self.end)
@@ -56,7 +58,7 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         iter_start, iter_end = self.calculater_iteration_boundaries()
         if iter_end > 0 and iter_start >= 0:
             _filter = (pc.field(self.id_field) >= pc.scalar(iter_start)) & (
-                    pc.field(self.id_field) < pc.scalar(iter_end)
+                pc.field(self.id_field) < pc.scalar(iter_end)
             )
         delta_table = DeltaTable(self.path)
         scanner = delta_table.to_pyarrow_dataset().scanner(
