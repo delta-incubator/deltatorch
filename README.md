@@ -2,6 +2,7 @@
 
 ![![image](https://github.com/mshtelma/deltatorch/workflows/build/badge.svg)](https://github.com/mshtelma/deltatorch/actions/workflows/ci.yml/badge.svg)
 ![![image](https://github.com/mshtelma/deltatorch/workflows/build/badge.svg)](https://github.com/mshtelma/deltatorch/actions/workflows/flake8.yml/badge.svg)
+![![image](https://github.com/mshtelma/deltatorch/workflows/build/badge.svg)](https://github.com/mshtelma/deltatorch/actions/workflows/black.yml/badge.svg)
 
 ## Concept
 
