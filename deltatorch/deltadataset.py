@@ -1,5 +1,6 @@
 import io
 import logging
+import math
 import threading
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
@@ -50,7 +51,7 @@ class DeltaIterableDataset(IterableDataset):
         self.drop_last = drop_last
         self.path = path
         self.batch_size = batch_size
-        self.boundaries_set = False
+        self.init_boundaries(path)
 
     @abstractmethod
     def process_data(self):
@@ -63,10 +64,9 @@ class DeltaIterableDataset(IterableDataset):
 
         if self.use_fixed_rank:
             if init_start_end:
-                new_start = self.rank * self.end / self.num_ranks
-                new_end = (self.rank + 1) * self.end / self.num_ranks
-                self.start = new_start
-                self.end = new_end
+                self.start, self.end = self.calc_boundaries(
+                    self.start, self.end, self.rank, self.num_ranks
+                )
                 logger.debug(
                     f"Using fixed rank.  Current rank: {self.rank} World size: {self.num_ranks}"
                 )
@@ -74,21 +74,26 @@ class DeltaIterableDataset(IterableDataset):
         elif torch.distributed.is_initialized():
             self.num_ranks = torch.distributed.get_world_size()
             self.rank = torch.distributed.get_rank()
+            logger.debug(
+                f"Detected DDP process. Current rank: {self.rank} World size: {self.num_ranks}"
+            )
             if init_start_end:
-                logger.debug(
-                    f"Detected DDP process. Current rank: {self.rank} World size: {self.num_ranks}"
+                self.start, self.end = self.calc_boundaries(
+                    self.start, self.end, self.rank, self.num_ranks
                 )
-                new_start = self.rank * self.end / self.num_ranks
-                new_end = (self.rank + 1) * self.end / self.num_ranks
                 logger.debug(
-                    "This rank will use the following set of rows: {self.start}-{self.end}"
+                    f"This rank will use the following set of rows: {self.start}-{self.end}"
                 )
-                self.start = new_start
-                self.end = new_end
         else:
             self.num_ranks = 1
             self.rank = 1
-        self.boundaries_set = True
+
+    @staticmethod
+    def calc_boundaries(start, end, rank, num_ranks):
+        per_worker_data_count = int(math.ceil((end - start) / float(num_ranks)))
+        new_start = start + rank * per_worker_data_count
+        new_end = min(start + (rank + 1) * per_worker_data_count, end)
+        return new_start, new_end
 
     @staticmethod
     def decode_and_transform_record(
@@ -114,18 +119,16 @@ class DeltaIterableDataset(IterableDataset):
         return _add_actions["num_records"].sum()
 
     def __iter__(self):
-        if not self.boundaries_set:
-            self.init_boundaries(self.path)
         return self.process_data()
 
     def __len__(self):
-        if not self.boundaries_set:
-            self.init_boundaries(self.path)
         if self.drop_last:
             per_machine_length = int(self.end - self.start)
             per_worker_length = int(per_machine_length / self.num_workers)
             number_of_batches_per_worker = per_worker_length // self.batch_size
-            batch_size_adjusted_per_machine_length = number_of_batches_per_worker * self.batch_size * self.num_workers
+            batch_size_adjusted_per_machine_length = (
+                number_of_batches_per_worker * self.batch_size * self.num_workers
+            )
             return batch_size_adjusted_per_machine_length
         else:
             return int(self.end - self.start)
