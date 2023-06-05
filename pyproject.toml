@@ -16,7 +16,6 @@ pillow = ">=9.5"
 [tool.poetry.dev-dependencies]
 setuptools = ">=67.7.2"
 requests = "2.29.0"
-torchtext = ">=0.15"
 torchvision = ">=0.15"
 pandas = ">=2.0.0"
 pyspark = ">=3.4.0"

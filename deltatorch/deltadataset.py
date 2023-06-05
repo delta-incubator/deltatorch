@@ -122,13 +122,13 @@ class DeltaIterableDataset(IterableDataset):
         return self.process_data()
 
     def __len__(self):
-        if self.drop_last:
-            per_machine_length = int(self.end - self.start)
-            per_worker_length = int(per_machine_length / self.num_workers)
-            number_of_batches_per_worker = per_worker_length // self.batch_size
-            batch_size_adjusted_per_machine_length = (
-                number_of_batches_per_worker * self.batch_size * self.num_workers
-            )
-            return batch_size_adjusted_per_machine_length
-        else:
-            return int(self.end - self.start)
+        # if self.drop_last:
+        #     per_machine_length = int(self.end - self.start)
+        #     per_worker_length = int(per_machine_length / self.num_workers)
+        #     number_of_batches_per_worker = per_worker_length // self.batch_size
+        #     batch_size_adjusted_per_machine_length = (
+        #         number_of_batches_per_worker * self.batch_size * self.num_workers
+        #     )
+        #     return batch_size_adjusted_per_machine_length
+        # else:
+        return int(self.end - self.start)

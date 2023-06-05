@@ -45,12 +45,12 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         if worker_info is None:
             return self.start, self.end
         else:
-            per_worker_data_count = int(
-                math.ceil((self.end - self.start) / float(worker_info.num_workers))
-            )
-            worker_id = worker_info.id
+            # per_worker_data_count = int(
+            #     math.ceil((self.end - self.start) / float(worker_info.num_workers))
+            # )
+            # worker_id = worker_info.id
             iter_start, iter_end = DeltaIterableDataset.calc_boundaries(
-                self.start, self.end, worker_id, worker_info.num_workers
+                self.start, self.end, worker_info.id, worker_info.num_workers
             )
             ##iter_start = self.start + worker_id * per_worker_data_count
             # iter_end = min(iter_start + per_worker_data_count, self.end)

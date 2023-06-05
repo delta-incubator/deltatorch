@@ -28,8 +28,6 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
         num_ranks: int = None,
         num_workers: int = 2,
         shuffle: bool = False,
-        timeout: int = 15,
-        queue_size: int = 250000,
     ):
         super().__init__(
             path,
@@ -39,8 +37,8 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
             num_ranks,
             num_workers,
             shuffle,
-            timeout,
-            queue_size,
+            batch_size,
+            drop_last,
         )
 
     def init_loading(self, path):
