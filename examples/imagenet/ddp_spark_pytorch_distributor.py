@@ -4,7 +4,11 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install pytorch-lightning git+https://github.com/delta-incubator/deltatorch
+# MAGIC %pip install pytorch-lightning  deltalake
+
+# COMMAND ----------
+
+# MAGIC %sh cd ../.. && pip install .
 
 # COMMAND ----------
 
@@ -172,8 +176,6 @@ class ImageNetDataModule(pl.LightningDataModule):
             num_workers=self.hparams.num_workers,
             shuffle=True,
             batch_size=self.hparams.batch_size,
-            timeout=30,
-            queue_size=1000,
         )
 
     def train_dataloader(self):
@@ -263,9 +265,9 @@ def main_training_loop(num_tasks, num_proc_per_task):
 
 # COMMAND ----------
 
-# NUM_TASKS = 1
-# NUM_PROC_PER_TASK = 1
-# model, ckpt_path = main_training_loop(NUM_TASKS, NUM_PROC_PER_TASK)
+#NUM_TASKS = 1
+#NUM_PROC_PER_TASK = 1
+#model, ckpt_path = main_training_loop(NUM_TASKS, NUM_PROC_PER_TASK)
 
 # COMMAND ----------
 
@@ -295,7 +297,7 @@ def main_training_loop(num_tasks, num_proc_per_task):
 
 from pyspark.ml.torch.distributor import TorchDistributor
 
-NUM_NODES = 4
+NUM_NODES = 2
 NUM_GPUS_PER_WORKER = 4
 NUM_TASKS = NUM_NODES * NUM_GPUS_PER_WORKER
 NUM_PROC_PER_TASK = 1
