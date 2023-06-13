@@ -1,20 +1,17 @@
 import io
 import logging
-import math
 import threading
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from queue import Queue
-from queue import Empty
+from typing import Optional, Callable, List, Tuple, Dict, Any
 
 import numpy as np
+import pyarrow.dataset as ds
 import torch.distributed
 from PIL import Image
 from deltalake import DeltaTable
 from torch.utils.data import IterableDataset
-import pyarrow.dataset as ds
-import pyarrow.compute as pc
-from typing import Optional, Callable, List, Tuple, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +35,8 @@ class DeltaIterableDataset(IterableDataset):
         num_ranks: int = None,
         num_workers: int = 2,
         shuffle: bool = False,
-        timeout: int = 15,
-        queue_size: int = 25000,
+        batch_size: int = 32,
+        drop_last: bool = False,
     ) -> None:
         super().__init__()
         self.path = path
@@ -50,21 +47,13 @@ class DeltaIterableDataset(IterableDataset):
         self.num_ranks = num_ranks
         self.num_workers = num_workers
         self.shuffle = shuffle
-        self.timeout = timeout
+        self.drop_last = drop_last
         self.path = path
-        self.queue_size = queue_size
-
-        self.queue = Queue(maxsize=queue_size)
-        self.stop_event = threading.Event()
-        self.delta_table = None
-        self.scanner = None
-        self.workers = []
-
-        self.loaded = False
+        self.batch_size = batch_size
         self.boundaries_set = False
 
     @abstractmethod
-    def init_loading(self, path):
+    def process_data(self):
         pass
 
     def init_boundaries(self, path, init_start_end: bool = True):
@@ -101,10 +90,6 @@ class DeltaIterableDataset(IterableDataset):
             self.rank = 1
         self.boundaries_set = True
 
-    @abstractmethod
-    def stop(self):
-        pass
-
     @staticmethod
     def decode_and_transform_record(
         item: Dict[str, Any], field_specs: List[FieldSpec]
@@ -129,22 +114,20 @@ class DeltaIterableDataset(IterableDataset):
         return _add_actions["num_records"].sum()
 
     def __iter__(self):
-        if self.loaded:
-            self.stop()
-        self.init_loading(self.path)
-        i = 0
-        while True:
-            try:
-                item = self.queue.get(block=True, timeout=self.timeout)
-                yield item
-                i += 1
-                # if i >= self.end:
-                #    return
-            except Empty:
-                print("empty ", i)
-                return
+        if not self.boundaries_set:
+            self.init_boundaries(self.path)
+        return self.process_data()
 
     def __len__(self):
         if not self.boundaries_set:
             self.init_boundaries(self.path)
-        return int(self.end - self.start)
+        if self.drop_last:
+            per_machine_length = int(self.end - self.start)
+            per_worker_length = int(per_machine_length / self.num_workers)
+            number_of_batches_per_worker = per_worker_length // self.batch_size
+            batch_size_adjusted_per_machine_length = (
+                number_of_batches_per_worker * self.batch_size * self.num_workers
+            )
+            return batch_size_adjusted_per_machine_length
+        else:
+            return int(self.end - self.start)
