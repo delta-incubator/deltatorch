@@ -1,10 +1,8 @@
 import io
 import logging
 import math
-import threading
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
-from queue import Queue
 from typing import Optional, Callable, List, Tuple, Dict, Any
 
 import numpy as np
@@ -68,21 +66,24 @@ class DeltaIterableDataset(IterableDataset):
                     self.start, self.end, self.rank, self.num_ranks
                 )
                 logger.debug(
-                    f"Using fixed rank.  Current rank: {self.rank} World size: {self.num_ranks}"
+                    f"Using fixed rank.  Current rank: {self.rank} "
+                    f"World size: {self.num_ranks}"
                 )
                 logger.debug(f"Start: {self.start} End: {self.end}")
         elif torch.distributed.is_initialized():
             self.num_ranks = torch.distributed.get_world_size()
             self.rank = torch.distributed.get_rank()
             logger.debug(
-                f"Detected DDP process. Current rank: {self.rank} World size: {self.num_ranks}"
+                f"Detected DDP process. "
+                f"Current rank: {self.rank} World size: {self.num_ranks}"
             )
             if init_start_end:
                 self.start, self.end = self.calc_boundaries(
                     self.start, self.end, self.rank, self.num_ranks
                 )
                 logger.debug(
-                    f"This rank will use the following set of rows: {self.start}-{self.end}"
+                    f"This rank will use the following "
+                    f"set of rows: {self.start}-{self.end}"
                 )
         else:
             self.num_ranks = 1
