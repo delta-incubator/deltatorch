@@ -4,7 +4,7 @@ import threading
 from queue import Queue
 from threading import Thread
 import random
-from typing import  List
+from typing import List
 
 from deltalake import DeltaTable
 
