@@ -265,9 +265,9 @@ def main_training_loop(num_tasks, num_proc_per_task):
 
 # COMMAND ----------
 
-#NUM_TASKS = 1
-#NUM_PROC_PER_TASK = 1
-#model, ckpt_path = main_training_loop(NUM_TASKS, NUM_PROC_PER_TASK)
+# NUM_TASKS = 1
+# NUM_PROC_PER_TASK = 1
+# model, ckpt_path = main_training_loop(NUM_TASKS, NUM_PROC_PER_TASK)
 
 # COMMAND ----------
 
