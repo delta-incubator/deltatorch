@@ -10,7 +10,7 @@ def create_pytorch_dataloader(
     path: str,
     id_field: str,
     fields: List[FieldSpec],
-    batch_size: int = None,
+    batch_size: int = 32,
     collate_fn: Optional[Callable[[List], Any]] = None,
     use_fixed_rank: bool = False,
     rank: int = None,

@@ -4,7 +4,11 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install pytorch-lightning git+https://github.com/delta-incubator/deltatorch
+# MAGIC %pip install pytorch-lightning  deltalake
+
+# COMMAND ----------
+
+# MAGIC %sh cd ../.. && pip install .
 
 # COMMAND ----------
 
@@ -41,22 +45,32 @@ val_delta_path = "/dbfs/tmp/udhay/cv_datasets/imagenet_val.delta"
 
 train_df = spark.read.format("delta").load(train_delta_path.replace("/dbfs", ""))
 unique_object_ids = train_df.select("object_id").distinct().collect()
-object_id_to_class_mapping = {unique_object_ids[idx].object_id: idx for idx in range(len(unique_object_ids))}
+object_id_to_class_mapping = {
+    unique_object_ids[idx].object_id: idx for idx in range(len(unique_object_ids))
+}
 
 # COMMAND ----------
 
-username = spark.sql("SELECT current_user()").first()['current_user()']
+username = spark.sql("SELECT current_user()").first()["current_user()"]
 
-experiment_path = f'/Users/{username}/imagenet-training'
+experiment_path = f"/Users/{username}/imagenet-training"
 
 # This is needed for later in the notebook
-db_host = dbutils.notebook.entry_point.getDbutils().notebook().getContext().extraContext().apply('api_url')
-db_token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+db_host = (
+    dbutils.notebook.entry_point.getDbutils()
+    .notebook()
+    .getContext()
+    .extraContext()
+    .apply("api_url")
+)
+db_token = (
+    dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+)
 
 # Manually create the experiment so that you can get the ID and can send it to the worker nodes for scaling
 experiment = mlflow.set_experiment(experiment_path)
 
-log_path = f"/dbfs/Users/{username}/imagenet_training_logger" 
+log_path = f"/dbfs/Users/{username}/imagenet_training_logger"
 
 # COMMAND ----------
 
@@ -69,14 +83,9 @@ log_path = f"/dbfs/Users/{username}/imagenet_training_logger"
 
 import time
 
-class ImageNetClassificationModel(pl.LightningModule):
-    def __init__(
-        self,
-        learning_rate: float,
-        momentum: float = 0.9,
-        rank: int = 0
-    ):
 
+class ImageNetClassificationModel(pl.LightningModule):
+    def __init__(self, learning_rate: float, momentum: float = 0.9, rank: int = 0):
         super().__init__()
         self.learn_rate = learning_rate
         self.momentum = momentum
@@ -116,7 +125,9 @@ class ImageNetClassificationModel(pl.LightningModule):
 
         return {"loss": loss, "acc": acc}
 
+
 # COMMAND ----------
+
 
 class ImageNetDataModule(pl.LightningDataModule):
     def __init__(
@@ -134,7 +145,6 @@ class ImageNetDataModule(pl.LightningDataModule):
         self.save_hyperparameters()
 
     def feature_transform(self, image):
-
         transform = transforms.Compose(
             [
                 transforms.Lambda(lambda x: x.convert("RGB")),
@@ -151,9 +161,7 @@ class ImageNetDataModule(pl.LightningDataModule):
     def target_transform(self, object_id):
         return self.hparams.object_id_to_class_mapping[object_id]
 
-    def dataloader(
-        self, path: str
-    ):
+    def dataloader(self, path: str):
         return create_pytorch_dataloader(
             path,
             id_field=self.hparams.id_column,
@@ -168,17 +176,14 @@ class ImageNetDataModule(pl.LightningDataModule):
             num_workers=self.hparams.num_workers,
             shuffle=True,
             batch_size=self.hparams.batch_size,
-            timeout=30,
-            queue_size=1000,
         )
 
     def train_dataloader(self):
-        return self.dataloader(
-            self.hparams.train_path
-        )
+        return self.dataloader(self.hparams.train_path)
 
     def val_dataloader(self):
         return self.dataloader(self.hparams.val_path)
+
 
 # COMMAND ----------
 
@@ -245,10 +250,11 @@ def main_training_loop(num_tasks, num_proc_per_task):
     )
 
     model = ImageNetClassificationModel(learning_rate=1e-5)
-    
+
     trainer.fit(model, datamodule)
 
     return model, trainer.checkpoint_callback.best_model_path
+
 
 # COMMAND ----------
 
@@ -276,7 +282,7 @@ def main_training_loop(num_tasks, num_proc_per_task):
 # NUM_GPUS_PER_WORKER = 1
 # NUM_PROC_PER_TASK = NUM_GPUS_PER_WORKER
 # NUM_PROC = NUM_TASKS * NUM_PROC_PER_TASK
-# (model, ckpt_path) = TorchDistributor(num_processes=NUM_PROC, local_mode=True, use_gpu=True).run(main_training_loop, NUM_TASKS, NUM_PROC_PER_TASK) 
+# (model, ckpt_path) = TorchDistributor(num_processes=NUM_PROC, local_mode=True, use_gpu=True).run(main_training_loop, NUM_TASKS, NUM_PROC_PER_TASK)
 
 # COMMAND ----------
 
@@ -291,9 +297,11 @@ def main_training_loop(num_tasks, num_proc_per_task):
 
 from pyspark.ml.torch.distributor import TorchDistributor
 
-NUM_NODES = 4
+NUM_NODES = 2
 NUM_GPUS_PER_WORKER = 4
 NUM_TASKS = NUM_NODES * NUM_GPUS_PER_WORKER
 NUM_PROC_PER_TASK = 1
 NUM_PROC = int(NUM_TASKS / NUM_PROC_PER_TASK)
-model, ckpt_path = TorchDistributor(num_processes=NUM_PROC, local_mode=False, use_gpu=True).run(main_training_loop, NUM_TASKS, NUM_PROC_PER_TASK)
+model, ckpt_path = TorchDistributor(
+    num_processes=NUM_PROC, local_mode=False, use_gpu=True
+).run(main_training_loop, NUM_TASKS, NUM_PROC_PER_TASK)

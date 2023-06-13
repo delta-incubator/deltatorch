@@ -1,16 +1,12 @@
-import io
 import logging
 import queue
 import threading
 from queue import Queue
 from threading import Thread
 import random
-from typing import Optional, Callable, List
+from typing import List
 
-import numpy as np
-from PIL import Image
 from deltalake import DeltaTable
-from torch.utils.data import get_worker_info
 
 from deltatorch import DeltaIterableDataset
 from deltatorch.deltadataset import FieldSpec
@@ -28,8 +24,6 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
         num_ranks: int = None,
         num_workers: int = 2,
         shuffle: bool = False,
-        timeout: int = 15,
-        queue_size: int = 250000,
     ):
         super().__init__(
             path,
@@ -39,8 +33,6 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
             num_ranks,
             num_workers,
             shuffle,
-            timeout,
-            queue_size,
         )
 
     def init_loading(self, path):
@@ -102,7 +94,8 @@ class SkipReadDeltaDataset(DeltaIterableDataset):
                     if batch_id % num_chunks != chunk:
                         continue
                     logger.debug(
-                        f"Worker {chunk} is processing batch {batch_id} with {rb.num_rows} rows."
+                        f"Worker {chunk} is processing batch {batch_id} "
+                        f"with {rb.num_rows} rows."
                     )
                     num_rows = rb.num_rows
                     indexes = list(range(num_rows))

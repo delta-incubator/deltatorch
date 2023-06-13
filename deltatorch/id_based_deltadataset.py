@@ -1,5 +1,4 @@
 import logging
-import math
 import random
 from typing import List
 
@@ -40,22 +39,25 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         )
         self.id_field = id_field
 
-    def calculater_iteration_boundaries(self):
+    def calc_chunk_boundaries_for_current_worker(self):
         worker_info = get_worker_info()
         if worker_info is None:
             return self.start, self.end
         else:
-            per_worker_data_count = int(
-                math.ceil((self.end - self.start) / float(worker_info.num_workers))
+            # per_worker_data_count = int(
+            #     math.ceil((self.end - self.start) / float(worker_info.num_workers))
+            # )
+            # worker_id = worker_info.id
+            iter_start, iter_end = DeltaIterableDataset.calc_boundaries(
+                self.start, self.end, worker_info.id, worker_info.num_workers
             )
-            worker_id = worker_info.id
-            iter_start = self.start + worker_id * per_worker_data_count
-            iter_end = min(iter_start + per_worker_data_count, self.end)
+            ##iter_start = self.start + worker_id * per_worker_data_count
+            # iter_end = min(iter_start + per_worker_data_count, self.end)
         return iter_start, iter_end
 
     def process_data(self):
         _filter = None
-        iter_start, iter_end = self.calculater_iteration_boundaries()
+        iter_start, iter_end = self.calc_chunk_boundaries_for_current_worker()
         if iter_end > 0 and iter_start >= 0:
             _filter = (pc.field(self.id_field) >= pc.scalar(iter_start)) & (
                 pc.field(self.id_field) < pc.scalar(iter_end)

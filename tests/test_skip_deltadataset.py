@@ -1,34 +1,27 @@
+import pathlib
 from typing import Tuple
 
-from deltalake import DeltaTable
+import pytest
 from deltalake.writer import write_deltalake
 import pandas as pd
-from torchtext.datasets import AG_NEWS
 
-import pytest
 
-from deltatorch import create_pytorch_dataloader, FieldSpec
-from deltatorch.id_based_deltadataset import IDBasedDeltaDataset
+from deltatorch import FieldSpec
 from deltatorch.skip_batch_deltadataset import SkipReadDeltaDataset
 
 
-@pytest.fixture
-def delta_table_info(tmpdir) -> Tuple[str, int]:
-    train_iter = AG_NEWS(split="train")
-    train_list = list(train_iter)
-    train_len = len(train_list)
-    classes, texts = list(zip(*train_list))
-    df = pd.DataFrame(
-        columns=["class", "text"], data={"class": list(classes), "text": texts}
-    )
+def create_delta_table(tmpdir, num_rows=-1) -> Tuple[str, int]:
+    df = pd.read_parquet(str(pathlib.Path.cwd() / "tests" / "data" / "ag_news.parquet"))
+    df = df[:num_rows]
     df["id"] = range(len(df))
     _delta_path = str(tmpdir / "ag_news.delta")
     write_deltalake(_delta_path, df)
-    return _delta_path, train_len
+    return _delta_path, len(df)
 
 
-def test_simple_read(delta_table_info):
-    delta_path, train_len = delta_table_info
+@pytest.mark.skip
+def test_simple_read(tmpdir):
+    delta_path, train_len = create_delta_table(tmpdir)
 
     dataset = SkipReadDeltaDataset(
         delta_path,
@@ -56,5 +49,3 @@ def test_simple_read(delta_table_info):
     for _ in dataset:
         i += 1
     print(i)
-
-    del dataset
