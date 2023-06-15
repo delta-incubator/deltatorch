@@ -1,7 +1,6 @@
 # deltatorch
 
 ![![image](https://github.com/mshtelma/deltatorch/workflows/build/badge.svg)](https://github.com/mshtelma/deltatorch/actions/workflows/ci.yml/badge.svg)
-![![image](https://github.com/mshtelma/deltatorch/workflows/build/badge.svg)](https://github.com/mshtelma/deltatorch/actions/workflows/flake8.yml/badge.svg)
 ![![image](https://github.com/mshtelma/deltatorch/workflows/build/badge.svg)](https://github.com/mshtelma/deltatorch/actions/workflows/black.yml/badge.svg)
 ![![image](https://github.com/mshtelma/deltatorch/workflows/build/badge.svg)](https://github.com/mshtelma/deltatorch/actions/workflows/lint.yml/badge.svg)
 
@@ -25,7 +24,7 @@ We support distributed training using PyTorch DDP as well.
 - with `pip`:
 
 ```
-pip install git+https://github.com/mshtelma/deltatorch
+pip install  git+https://github.com/delta-incubator/deltatorch
 ```
 ### Create PyTorch DataLoader to read our DeltaLake table
 
