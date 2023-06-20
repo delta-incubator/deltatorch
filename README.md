@@ -10,7 +10,16 @@
 Using  `deltatorch`, users can create a PyTorch  `DataLoader` to load the training data. 
 We support distributed training using PyTorch DDP as well. 
 
+## Why yet another data-loading framework?
 
+- Many Deep Learning projects are struggling with efficient data loading, especially with tabular datasets or datasets containing many small images
+- Classical Big Data formats like Parquet can help with this issue, but are hard to operate:
+* writers might block readers
+* Failed write can make the whole dataset unreadable
+* More complicated projects might ingest data all the time, even during training
+
+Delta Lake storage format solves all these issues, but PyTorch has no direct support for `DeltaLake` datasets.
+`deltatorch` introduces such support and allows users to use `DeltaLake` for training Deep Learning models using PyTorch.
 
 ## Usage
 
