@@ -119,6 +119,35 @@ def test_pt_dataloader(tmpdir):
         assert item["text"] is not None
 
 
+def test_pt_dataloader_creation_with_kwargs(tmpdir):
+    delta_path, train_len = create_delta_table(tmpdir)
+    pytorch_dataloader_kwargs = {"pin_memory": True}
+    dl = create_pytorch_dataloader(
+        delta_path,
+        id_field="id",
+        fields=[
+            FieldSpec(
+                "text",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+            FieldSpec(
+                "class",
+                decode_numpy_and_apply_shape=None,
+                load_image_using_pil=False,
+                transform=None,
+            ),
+        ],
+        use_fixed_rank=True,
+        rank=2,
+        num_ranks=4,
+        batch_size=32,
+        drop_last=False,
+        **pytorch_dataloader_kwargs
+    )
+
+
 def test_read_different_length(tmpdir):
     delta_path, train_len = create_delta_table(tmpdir, num_rows=789)
 
