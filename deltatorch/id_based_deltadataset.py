@@ -1,8 +1,9 @@
 import logging
 import random
-from typing import List
+from typing import List, Optional, Tuple, Any
 
 import pyarrow.compute as pc
+from pyarrow.dataset import Expression
 from deltalake import DeltaTable
 from torch.utils.data import get_worker_info
 
@@ -18,6 +19,8 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         path: str,
         id_field: str,
         fields: List[FieldSpec],
+        version: Optional[int] = None,
+        partition_filter: Optional[List[Tuple[str, str, Any]]] = None,
         use_fixed_rank: bool = False,
         rank: int = None,
         num_ranks: int = None,
@@ -29,6 +32,8 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         super().__init__(
             path,
             fields,
+            partition_filter,
+            version,
             use_fixed_rank,
             rank,
             num_ranks,
@@ -62,7 +67,8 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
             _filter = (pc.field(self.id_field) >= pc.scalar(iter_start)) & (
                 pc.field(self.id_field) < pc.scalar(iter_end)
             )
-        delta_table = DeltaTable(self.path)
+
+        delta_table = DeltaTable(self.path, version=self.version)
         scanner = delta_table.to_pyarrow_dataset().scanner(
             columns=self.arrow_fields, filter=_filter
         )

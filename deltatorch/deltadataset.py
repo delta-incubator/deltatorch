@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from typing import Optional, Callable, List, Tuple, Dict, Any
 
 import numpy as np
+import pyarrow as pa
 import pyarrow.dataset as ds
 import torch.distributed
 from PIL import Image
 from deltalake import DeltaTable
 from torch.utils.data import IterableDataset
+import evalidate
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,8 @@ class DeltaIterableDataset(IterableDataset):
         self,
         path: str,
         fields: List[FieldSpec],
+        partition_filter: Optional[List[Tuple[str, str, Any]]] = None,
+        version: Optional[int] = None,
         use_fixed_rank: bool = False,
         rank: int = None,
         num_ranks: int = None,
@@ -39,6 +43,8 @@ class DeltaIterableDataset(IterableDataset):
     ) -> None:
         super().__init__()
         self.path = path
+        self.version = version
+        self.partition_filter = partition_filter
         self.field_specs = fields
         self.arrow_fields = {field.name: ds.field(field.name) for field in fields}
         self.use_fixed_rank = use_fixed_rank
@@ -115,9 +121,28 @@ class DeltaIterableDataset(IterableDataset):
         return item
 
     def count(self):
-        _delta_table = DeltaTable(self.path)
-        _add_actions = _delta_table.get_add_actions().to_pandas()
-        return _add_actions["num_records"].sum()
+        _delta_table = self.create_delta_table()
+
+        if self.partition_filter:
+            return self.count_with_partition_filters(_delta_table)
+        else:
+            _add_actions = _delta_table.get_add_actions().to_pandas()
+            return _add_actions["num_records"].sum()
+
+    def count_with_partition_filters(self, _delta_table):
+        _cnt = 0
+        _add_actions_list = _delta_table.get_add_actions().to_pylist()
+        _partition_exprs = " and ".join(["".join(e) for e in self.partition_filter])
+        _partition_exprs = _partition_exprs.replace("=", "==")
+        _partition_exprs = _partition_exprs.replace("true", "True")
+        _partition_exprs = _partition_exprs.replace("false", "False")
+        for item in _add_actions_list:
+            if evalidate.safeeval(_partition_exprs, context=item["partition_values"]):
+                _cnt += item["num_records"]
+        return _cnt
+
+    def create_delta_table(self):
+        return DeltaTable(self.path, version=self.version)
 
     def __iter__(self):
         return self.process_data()

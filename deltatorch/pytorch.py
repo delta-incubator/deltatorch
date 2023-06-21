@@ -1,5 +1,6 @@
-from typing import List
+from typing import List, Optional, Tuple, Any
 
+from pyarrow.dataset import Expression
 from torch.utils.data import DataLoader
 
 from .deltadataset import FieldSpec
@@ -10,6 +11,8 @@ def create_pytorch_dataloader(
     path: str,
     id_field: str,
     fields: List[FieldSpec],
+    partition_filter: Optional[List[Tuple[str, str, Any]]] = None,
+    version: Optional[int] = None,
     batch_size: int = 32,
     use_fixed_rank: bool = False,
     rank: int = None,
@@ -29,6 +32,8 @@ def create_pytorch_dataloader(
     :param id_field: Autoincrement ID field.delta table must have an autoincrement ID
     field.This field is used by deltatorch for sharding and parallel data loading
     :param fields: List of  `detatorch.FieldSpec` used for training
+    :param version: Delta Table Version to load
+    :param partition_filter: A list of partition filters
     :param batch_size: The number of items to return per batch. Default ``32``.
     :param rank: Rank of the current process within the current distributed
             group. This value is set by ``torch.distributed.get_rank()``
@@ -55,6 +60,8 @@ def create_pytorch_dataloader(
         path,
         id_field,
         fields,
+        version,
+        partition_filter,
         use_fixed_rank,
         rank,
         num_ranks,
