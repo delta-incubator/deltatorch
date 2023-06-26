@@ -23,6 +23,7 @@ class FieldSpec(ABC):
     decode_numpy_and_apply_shape: Optional[Tuple[int, int]] = None
     load_image_using_pil: bool = False
     transform: Optional[Callable] = None
+    full_record_transform: Optional[Callable] = None
     target_name: Optional[str] = None
 
 
@@ -115,7 +116,10 @@ class DeltaIterableDataset(IterableDataset):
                 )
             if spec.load_image_using_pil:
                 _item = Image.open(io.BytesIO(_item))
-            if spec.transform:
+            if spec.full_record_transform:
+                item[_target_name] = _item
+                item = spec.full_record_transform(item)
+            elif spec.transform:
                 _item = spec.transform(_item)
             item[_target_name] = _item
         return item
