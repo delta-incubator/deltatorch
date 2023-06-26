@@ -119,6 +119,7 @@ class DeltaIterableDataset(IterableDataset):
             if spec.full_record_transform:
                 item[_target_name] = _item
                 item = spec.full_record_transform(item)
+                return item
             elif spec.transform:
                 _item = spec.transform(_item)
             item[_target_name] = _item
