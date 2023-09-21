@@ -137,7 +137,7 @@ class DeltaIterableDataset(IterableDataset):
         _partition_exprs = _partition_exprs.replace("true", "True")
         _partition_exprs = _partition_exprs.replace("false", "False")
         for item in _add_actions_list:
-            if evalidate.safeeval(_partition_exprs, context=item["partition_values"]):
+            if evalidate.Expr(_partition_exprs).eval(item["partition_values"]):
                 _cnt += item["num_records"]
         return _cnt
 

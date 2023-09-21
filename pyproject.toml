@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "deltatorch"
-version = "0.0.1"
+version = "0.0.2"
 description = "DeltaTorch allows loading training data from  DeltaLake tables for training Deep Learning models using PyTorch"
 authors = ["Michael Shtelma <mshtelma@gmail.com>"]
 license = "Apache-2.0"
@@ -10,9 +10,9 @@ keywords = ['delta', 'torch', 'pytorch', 'deltalake']
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
-deltalake = ">=0.10.0"
+deltalake = ">=0.10.2"
 pillow = ">=9.5"
-evalidate = ">=1.1.0"
+evalidate = ">=2.0.2"
 
 [tool.poetry.dev-dependencies]
 setuptools = ">=67.7.2"
