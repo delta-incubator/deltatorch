@@ -1,6 +1,6 @@
 import logging
 import random
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Tuple, Any, Dict
 
 import pyarrow.compute as pc
 from pyarrow.dataset import Expression
@@ -28,6 +28,7 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
         shuffle: bool = False,
         batch_size: int = 32,
         drop_last: bool = False,
+        storage_options: Optional[Dict[str, str]] = None,
     ):
         super().__init__(
             path,
@@ -41,6 +42,7 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
             shuffle,
             batch_size,
             drop_last,
+            storage_options,
         )
         self.id_field = id_field
 

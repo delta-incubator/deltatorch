@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Tuple, Any, Dict
 
 from pyarrow.dataset import Expression
 from torch.utils.data import DataLoader
@@ -20,6 +20,7 @@ def create_pytorch_dataloader(
     num_workers: int = 2,
     shuffle: bool = False,
     drop_last: bool = False,
+    storage_options: Optional[Dict[str, str]] = None,
     **pytorch_dataloader_kwargs
 ):
     """Create a PyTorch DataLoader.
@@ -50,6 +51,7 @@ def create_pytorch_dataloader(
             if the dataset size is not divisible by the batch size. If ``False`` and
             the size of dataset is not divisible by the batch size, then the last batch
             will be smaller. (default: ``False``)
+    :param storage_options: a dictionary of the options to use for the storage backend
     :param pytorch_dataloader_kwargs: arguments for `torch.utils.data.DataLoader`,
         exclude these arguments: ``batch_size``, ``num_workers``, ``shuffle``,
         ``drop_last``.
@@ -69,6 +71,7 @@ def create_pytorch_dataloader(
         shuffle,
         batch_size,
         drop_last,
+        storage_options
     )
 
     return DataLoader(
