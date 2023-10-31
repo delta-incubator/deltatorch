@@ -10,7 +10,7 @@ keywords = ['delta', 'torch', 'pytorch', 'deltalake']
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
-deltalake = ">=0.10.2"
+deltalake = ">=0.12.0"
 pillow = ">=9.5"
 evalidate = ">=2.0.2"
 
@@ -29,12 +29,7 @@ flake8-bugbear = ">=23"
 flake8-pyprojecttoml = ">=0.0.2"
 flake8-pyproject = ">=1.2.3"
 pep8-naming = ">=0.13"
-#diffusers = ">=0.16.1"
-#accelerate = ">=0.18.0"
-#transformers = ">=4.29.1"
-#datasets = ">=2.12.0"
-#pytorch-lightning = ">=2.0.2"
-#torchmetrics = ">=0.11.4"
+
 
 [tool.poetry.group.mkdocs]
 optional = true

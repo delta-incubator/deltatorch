@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Optional, Callable, List, Tuple, Dict, Any
 
 import numpy as np
-import pyarrow as pa
 import pyarrow.dataset as ds
 import torch.distributed
 from PIL import Image
@@ -40,6 +39,7 @@ class DeltaIterableDataset(IterableDataset):
         shuffle: bool = False,
         batch_size: int = 32,
         drop_last: bool = False,
+        storage_options: Optional[Dict[str, str]] = None,
     ) -> None:
         super().__init__()
         self.path = path
@@ -55,6 +55,7 @@ class DeltaIterableDataset(IterableDataset):
         self.drop_last = drop_last
         self.path = path
         self.batch_size = batch_size
+        self.storage_options = storage_options
         self.init_boundaries(path)
 
     @abstractmethod
@@ -127,7 +128,9 @@ class DeltaIterableDataset(IterableDataset):
             return self.count_with_partition_filters(_delta_table)
         else:
             _add_actions = _delta_table.get_add_actions().to_pandas()
-            return _add_actions["num_records"].sum()
+            num_records = _add_actions["num_records"].sum()
+            del _delta_table
+            return num_records
 
     def count_with_partition_filters(self, _delta_table):
         _cnt = 0
@@ -142,7 +145,17 @@ class DeltaIterableDataset(IterableDataset):
         return _cnt
 
     def create_delta_table(self):
-        return DeltaTable(self.path, version=self.version)
+        delta_table = DeltaTable(
+            self.path, version=self.version, storage_options=self.storage_options
+        )
+        conf = delta_table.metadata().configuration
+        if conf:
+            deletion_vectors = conf.get("delta.enableDeletionVectors", None)
+            if deletion_vectors == "true":
+                raise Exception(
+                    "Tables with enabled Deletion Vectors are not supported."
+                )
+        return delta_table
 
     def __iter__(self):
         return self.process_data()
