@@ -1,6 +1,5 @@
 from typing import List, Optional, Tuple, Any, Dict
 
-from pyarrow.dataset import Expression
 from torch.utils.data import DataLoader
 
 from .deltadataset import FieldSpec

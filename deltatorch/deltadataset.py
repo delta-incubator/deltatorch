@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Optional, Callable, List, Tuple, Dict, Any
 
 import numpy as np
-import pyarrow as pa
 import pyarrow.dataset as ds
 import torch.distributed
 from PIL import Image

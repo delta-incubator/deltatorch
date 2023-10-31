@@ -3,8 +3,6 @@ import random
 from typing import List, Optional, Tuple, Any, Dict
 
 import pyarrow.compute as pc
-from pyarrow.dataset import Expression
-from deltalake import DeltaTable
 from torch.utils.data import get_worker_info
 
 from deltatorch import DeltaIterableDataset
