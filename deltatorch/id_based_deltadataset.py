@@ -70,7 +70,7 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
                 pc.field(self.id_field) < pc.scalar(iter_end)
             )
 
-        delta_table = DeltaTable(self.path, version=self.version)
+        delta_table = self.create_delta_table()
         scanner = delta_table.to_pyarrow_dataset().scanner(
             columns=self.arrow_fields, filter=_filter
         )
@@ -85,3 +85,4 @@ class IDBasedDeltaDataset(DeltaIterableDataset):
                     item, self.field_specs
                 )
                 yield item
+        del delta_table

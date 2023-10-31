@@ -129,7 +129,9 @@ class DeltaIterableDataset(IterableDataset):
             return self.count_with_partition_filters(_delta_table)
         else:
             _add_actions = _delta_table.get_add_actions().to_pandas()
-            return _add_actions["num_records"].sum()
+            num_records = _add_actions["num_records"].sum()
+            del _delta_table
+            return num_records
 
     def count_with_partition_filters(self, _delta_table):
         _cnt = 0
