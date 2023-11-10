@@ -51,7 +51,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 # copy files from source to destination
-def copy_files(src_paths, dest_dir, file_pattern):
+def copy_files(src_paths, dest_dir):
     # process all file paths
     for src_path in src_paths:
         # copy source file to dest file
@@ -88,7 +88,7 @@ def copy_parallel(src="tmp", dest="tmp2", file_extension=".xml"):
 source_dir = ""
 target_dir = ""
 
-copy_parallel(src=source_dir, dest=target_dir, file_pattern="*.xml")
+copy_parallel(src=source_dir, dest=target_dir, file_extension="*.xml")
 
 # COMMAND ----------
 
@@ -97,7 +97,7 @@ copy_parallel(src=source_dir, dest=target_dir, file_pattern="*.xml")
 source_dir = ""
 target_dir = ""
 
-copy_parallel(src=source_dir, dest=target_dir, file_pattern="*.JPEG")
+copy_parallel(src=source_dir, dest=target_dir, file_extension="*.JPEG")
 
 # COMMAND ----------
 
