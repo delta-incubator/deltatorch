@@ -13,13 +13,11 @@ from torchmetrics import Accuracy
 
 from torchvision import transforms, models
 
-from deltatorch import create_pytorch_dataloader
-
 # COMMAND ----------
 
 
 from torchvision.datasets import Caltech256
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from torch.utils.data.dataset import random_split
 
 
